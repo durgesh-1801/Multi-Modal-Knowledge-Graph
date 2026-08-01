@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { NavigationTab } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface DashboardViewProps {
   onNavigate: (tab: NavigationTab) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
+  const { activeRole, user } = useAuth();
   const [filterActive, setFilterActive] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [batchFile, setBatchFile] = useState<string | null>(null);
@@ -248,36 +250,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+      {/* Role-Specific Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
-          <h2 className="font-headline-lg text-headline-lg font-semibold text-primary">System Overview</h2>
-          <p className="font-body-md text-on-surface-variant text-sm">Real-time extraction & compliance health metrics</p>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+              {activeRole.replace('_', ' ')} Dashboard
+            </span>
+            <span className="text-xs text-slate-400 font-mono">User: {user.email}</span>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">
+            {activeRole === 'ADMIN' && 'Enterprise System Administration & Analytics'}
+            {activeRole === 'COMPLIANCE_OFFICER' && 'Compliance Operations & Document Processing'}
+            {activeRole === 'AUDITOR' && 'Compliance Audit & Verification Center'}
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            {activeRole === 'ADMIN' && 'Full system governance: users, projects, documents, graph health, and audit logs.'}
+            {activeRole === 'COMPLIANCE_OFFICER' && 'Ingestion pipelines, OCR parsing, AI insights, and relationship extractions.'}
+            {activeRole === 'AUDITOR' && 'Read-only graph inspection, compliance reporting, and grounded AI citation checks.'}
+          </p>
         </div>
         <div className="flex gap-3">
           <button
             onClick={() => setExportModalOpen(true)}
-            className="px-4 py-2 bg-surface-container-high border border-outline-variant/30 text-on-surface rounded-xl flex items-center gap-2 hover:bg-surface-container-highest active:scale-95 transition-all cursor-pointer shadow-sm"
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-800 rounded-xl flex items-center gap-2 transition-all cursor-pointer shadow-xs text-xs font-bold"
           >
-            <span className="material-symbols-outlined text-tertiary text-lg">download</span>
-            <span className="font-label-md text-xs font-semibold">Export Report</span>
+            <span className="material-symbols-outlined text-blue-600 text-base">download</span>
+            <span>Export Audit Report</span>
           </button>
-          <button
-            onClick={() => setFilterActive(!filterActive)}
-            className={`px-4 py-2 glass-card rounded-xl flex items-center gap-2 hover:bg-surface-container-highest transition-all cursor-pointer ${
-              filterActive ? 'border-primary text-primary' : ''
-            }`}
-          >
-            <span className="material-symbols-outlined text-primary text-lg">filter_list</span>
-            <span className="font-label-md text-xs">{filterActive ? 'Filtered (Active)' : 'Filter View'}</span>
-          </button>
-          <button
-            onClick={() => onNavigate('upload')}
-            className="px-4 py-2 bg-primary text-on-primary rounded-xl flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-lg shadow-primary/20 cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-lg">add</span>
-            <span className="font-label-md text-xs font-semibold">Process New Batch</span>
-          </button>
+
+          {activeRole !== 'AUDITOR' && (
+            <button
+              onClick={() => onNavigate('upload')}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl flex items-center gap-2 transition-all shadow-xs cursor-pointer text-xs font-bold"
+            >
+              <span className="material-symbols-outlined text-base">cloud_upload</span>
+              <span>Upload Document</span>
+            </button>
+          )}
         </div>
       </div>
 

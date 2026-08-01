@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { NavigationTab } from '../types';
+import { NavigationTab, Role } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface HeaderProps {
   activeTab: NavigationTab;
@@ -9,6 +10,8 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showRoleMenu, setShowRoleMenu] = useState(false);
+  const { user, activeRole, switchRole } = useAuth();
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
@@ -17,39 +20,30 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
     }
   };
 
-  const getHeaderTitle = () => {
-    switch (activeTab) {
-      case 'explorer':
-        return 'GraphAI Compliance';
-      case 'chat':
-        return 'GraphAI Compliance';
-      default:
-        return null;
+  const getRoleBadgeStyle = (role: Role) => {
+    switch (role) {
+      case 'ADMIN':
+        return 'bg-purple-100 text-purple-700 border-purple-300';
+      case 'COMPLIANCE_OFFICER':
+        return 'bg-blue-100 text-blue-700 border-blue-300';
+      case 'AUDITOR':
+        return 'bg-emerald-100 text-emerald-700 border-emerald-300';
     }
   };
-
-  const headerTitle = getHeaderTitle();
 
   return (
     <header className="fixed top-0 right-0 left-60 h-16 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs flex justify-between items-center px-6 z-40">
       <div className="flex items-center gap-4 flex-1">
-        {headerTitle && (
-          <div className="flex items-center gap-3">
-            <span className="font-headline-md text-headline-md font-extrabold text-blue-600">
-              {headerTitle}
-            </span>
-            {activeTab === 'chat' && (
-              <>
-                <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
-                <span className="font-label-md text-slate-500 text-xs hidden md:inline-block font-medium">
-                  Session: HIPAA-Q3-Review
-                </span>
-              </>
-            )}
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <span className="font-headline-md text-headline-md font-extrabold text-blue-600">
+            GraphAI Compliance
+          </span>
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getRoleBadgeStyle(activeRole)} uppercase tracking-wider`}>
+            {activeRole.replace('_', ' ')}
+          </span>
+        </div>
 
-        <div className={`relative w-full max-w-md ${headerTitle ? 'ml-6' : ''}`}>
+        <div className="relative w-full max-w-md ml-4">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
             search
           </span>
@@ -57,19 +51,56 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
             type="text"
             value={searchQuery}
             onChange={handleSearchChange}
-            placeholder={
-              activeTab === 'explorer'
-                ? 'Search entities...'
-                : activeTab === 'chat'
-                ? 'Search conversation context...'
-                : 'Search knowledge graph...'
-            }
+            placeholder="Search enterprise knowledge graph & documents..."
             className="w-full bg-slate-50 border border-slate-200 rounded-full py-1.5 pl-10 pr-4 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-600 focus:bg-white focus:ring-2 focus:ring-blue-600/15 transition-all shadow-2xs"
           />
         </div>
       </div>
 
       <div className="flex items-center gap-4">
+        {/* Quick Role Switcher Dropdown for Testing & Evaluation */}
+        <div className="relative">
+          <button
+            onClick={() => setShowRoleMenu(!showRoleMenu)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl transition-all text-xs font-semibold text-slate-800 cursor-pointer"
+            title="Switch User Role for Testing"
+          >
+            <span className="material-symbols-outlined text-sm text-blue-600">published_with_changes</span>
+            <span>Switch Role: <strong>{activeRole}</strong></span>
+            <span className="material-symbols-outlined text-sm">arrow_drop_down</span>
+          </button>
+
+          {showRoleMenu && (
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in">
+              <div className="px-3 py-1.5 border-b border-slate-100 text-[10px] uppercase tracking-wider text-slate-400 font-bold">
+                Select Active Role
+              </div>
+              <button
+                onClick={() => { switchRole('ADMIN'); setShowRoleMenu(false); }}
+                className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-purple-50 cursor-pointer ${activeRole === 'ADMIN' ? 'font-bold text-purple-700 bg-purple-50/50' : 'text-slate-700'}`}
+              >
+                <span>Admin</span>
+                <span className="text-[10px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded">Full Access</span>
+              </button>
+              <button
+                onClick={() => { switchRole('COMPLIANCE_OFFICER'); setShowRoleMenu(false); }}
+                className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-blue-50 cursor-pointer ${activeRole === 'COMPLIANCE_OFFICER' ? 'font-bold text-blue-700 bg-blue-50/50' : 'text-slate-700'}`}
+              >
+                <span>Compliance Officer</span>
+                <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded">Ingest & RAG</span>
+              </button>
+              <button
+                onClick={() => { switchRole('AUDITOR'); setShowRoleMenu(false); }}
+                className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between hover:bg-emerald-50 cursor-pointer ${activeRole === 'AUDITOR' ? 'font-bold text-emerald-700 bg-emerald-50/50' : 'text-slate-700'}`}
+              >
+                <span>Auditor</span>
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">Read-Only</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Notifications Icon */}
         <div className="relative">
           <button
             onClick={() => setShowNotifications(!showNotifications)}
@@ -95,10 +126,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
                   <p className="text-xs text-blue-700 font-bold mb-0.5">Batch Completed</p>
                   <p className="text-[11px] text-slate-600">Legal_Corp_2024.zip batch relationship extraction done.</p>
                 </div>
-                <div className="p-2.5 bg-emerald-50/70 border-l-3 border-emerald-600 rounded-r-xl">
-                  <p className="text-xs text-emerald-700 font-bold mb-0.5">HIPAA Audit Passed</p>
-                  <p className="text-[11px] text-slate-600">Section 164.308 compliance score upgraded to A+.</p>
-                </div>
               </div>
             </div>
           )}
@@ -106,10 +133,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
 
         <div className="h-6 w-[1px] bg-slate-200"></div>
 
-        <div className="flex items-center gap-3 cursor-pointer p-1 rounded-xl hover:bg-slate-50 transition-colors">
+        <div className="flex items-center gap-3 p-1">
           <div className="text-right hidden lg:block">
-            <p className="font-label-md text-xs font-bold text-slate-900">Compliance Officer</p>
-            <p className="text-[10px] text-slate-500 font-medium">Admin Access</p>
+            <p className="font-label-md text-xs font-bold text-slate-900">{user.name}</p>
+            <p className="text-[10px] text-slate-500 font-medium">{user.email}</p>
           </div>
           <div className="w-8 h-8 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs">
             <span className="material-symbols-outlined text-lg">account_circle</span>

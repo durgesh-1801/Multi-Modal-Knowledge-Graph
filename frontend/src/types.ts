@@ -1,12 +1,69 @@
+export type Role = 'ADMIN' | 'COMPLIANCE_OFFICER' | 'AUDITOR';
+
+export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
+
 export type NavigationTab = 
   | 'dashboard'
+  | 'projects'
+  | 'users'
   | 'upload'
   | 'documents'
   | 'knowledge-graph'
   | 'chat'
   | 'analytics'
   | 'explorer'
-  | 'settings';
+  | 'reports'
+  | 'settings'
+  | 'logs'
+  | '403';
+
+export interface User {
+  id: str;
+  email: string;
+  name: string;
+  role: Role;
+  status: UserStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectMember {
+  user_id: string;
+  user_name?: string;
+  user_email?: string;
+  role: Role;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  owner_id: string;
+  members: ProjectMember[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id: string;
+  user_email: string;
+  role: string;
+  action: string;
+  timestamp: string;
+  ip_address: string;
+  details: string;
+}
+
+export interface SystemSettingsData {
+  llm_provider: string;
+  neo4j_uri: string;
+  qdrant_url: string;
+  embedding_model: string;
+  api_key_status: string;
+  theme: string;
+  security_audit_mode: boolean;
+}
 
 export interface KPIMetric {
   id: string;
