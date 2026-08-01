@@ -1,0 +1,42 @@
+# Backend Dependencies for Enterprise Compliance Knowledge Graph Platform
+# Minimum versions set to support Pydantic v2, Python 3.12+, PDF Ingestion, OCR, Audio Transcription, Entity Extraction, Vector Search, and Graph RAG Engine
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.28.0
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+python-dotenv>=1.0.1
+loguru>=0.7.2
+httpx>=0.27.0
+python-multipart>=0.0.9
+
+# PDF Parsing & Extraction Dependencies
+PyMuPDF>=1.23.0
+pdfplumber>=0.10.0
+camelot-py[cv]>=0.11.0
+opencv-python-headless>=4.9.0
+
+# OCR & Image Processing Dependencies
+paddleocr>=2.7.0
+pytesseract>=0.3.10
+pdf2image>=1.17.0
+Pillow>=10.0.0
+numpy>=1.26.0
+
+# Audio Processing & Transcription Dependencies
+openai-whisper>=20231117
+pydub>=0.25.1
+soundfile>=0.12.1
+librosa>=0.10.1
+
+# Entity Extraction & NLP Dependencies
+spacy>=3.7.0
+google-generativeai>=0.4.0
+
+# Embedding Generation & Vector Store Dependencies
+qdrant-client>=1.7.0
+sentence-transformers>=2.5.0
+
+# Graph RAG & Workflow Dependencies
+langgraph>=0.0.25
+langchain-core>=0.1.30
