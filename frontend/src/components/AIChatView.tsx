@@ -138,9 +138,9 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
   return (
     <div className="h-[calc(100vh-64px)] -m-8 flex relative overflow-hidden select-none animate-in fade-in duration-300">
       {/* Left History Sidebar */}
-      <section className="w-72 bg-surface-container-low/50 border-r border-outline-variant/20 flex flex-col overflow-hidden hidden md:flex">
-        <div className="p-4 flex items-center justify-between border-b border-outline-variant/10">
-          <span className="font-label-md font-bold uppercase tracking-widest text-xs text-on-surface-variant">
+      <section className="w-72 bg-white border-r border-slate-200 flex flex-col overflow-hidden hidden md:flex">
+        <div className="p-4 flex items-center justify-between border-b border-slate-200">
+          <span className="font-label-md font-bold uppercase tracking-widest text-xs text-slate-500">
             Recent History
           </span>
           <button
@@ -156,7 +156,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
               setActiveSessionId(newS.id);
               setMessages([]);
             }}
-            className="p-1 hover:bg-surface-container-highest rounded transition-colors text-on-surface-variant hover:text-primary cursor-pointer"
+            className="p-1 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 hover:text-blue-600 cursor-pointer"
             title="Start New Audit Session"
           >
             <span className="material-symbols-outlined text-sm">edit_note</span>
@@ -172,100 +172,101 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
                 setSessions((prev) => prev.map((s) => ({ ...s, active: s.id === sess.id })));
               }}
               className={`p-3 rounded-xl cursor-pointer transition-colors ${
-                sess.active ? 'bg-surface-container-highest border border-outline-variant/30' : 'hover:bg-surface-container-high'
+                sess.active ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-50'
               }`}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className={`material-symbols-outlined text-sm ${sess.active ? 'text-primary' : 'text-on-surface-variant'}`}>
+                <span className={`material-symbols-outlined text-sm ${sess.active ? 'text-blue-600' : 'text-slate-400'}`}>
                   chat_bubble
                 </span>
-                <span className={`font-label-md text-xs font-bold truncate ${sess.active ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+                <span className={`font-label-md text-xs font-bold truncate ${sess.active ? 'text-blue-900' : 'text-slate-700'}`}>
                   {sess.title}
                 </span>
               </div>
-              <p className="text-[11px] text-on-surface-variant truncate">{sess.preview}</p>
+              <p className="text-[11px] text-slate-500 truncate">{sess.preview}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* Main Chat Workspace */}
-      <section className="flex-1 flex flex-col relative h-full bg-surface/30">
+      <section className="flex-1 flex flex-col relative h-full bg-slate-50">
         {/* Messages Scroll Display */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth">
           {messages.map((msg) => (
             <div key={msg.id} className="space-y-4">
               {msg.sender === 'user' ? (
                 <div className="flex justify-end items-start gap-3">
-                  <div className="max-w-[80%] bg-primary-container/20 border border-primary/30 p-4 rounded-2xl rounded-tr-none shadow-md">
-                    <p className="font-body-md text-sm text-on-surface">{msg.text}</p>
+                  <div className="max-w-[80%] bg-blue-600 text-white p-4 rounded-2xl rounded-tr-none shadow-sm">
+                    <p className="font-body-md text-sm">{msg.text}</p>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-secondary-container flex-shrink-0 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-on-secondary-container text-sm">person</span>
+                  <div className="w-8 h-8 rounded-full bg-blue-100 border border-blue-200 flex-shrink-0 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-blue-700 text-sm">person</span>
                   </div>
                 </div>
               ) : (
                 <div className="flex justify-start items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary flex-shrink-0 flex items-center justify-center text-on-primary">
+                  <div className="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white shadow-sm">
                     <span className="material-symbols-outlined text-sm fill">auto_awesome</span>
                   </div>
                   <div className="flex-1 max-w-[88%] space-y-4">
-                    <div className="glass-card p-6 rounded-2xl rounded-tl-none border border-outline-variant/30 shadow-xl">
-                      <div className="text-sm text-on-surface leading-relaxed whitespace-pre-line mb-4 font-body-md">
+                    <div className="bg-white p-6 rounded-2xl rounded-tl-none border border-slate-200 shadow-sm">
+                      <div className="text-sm text-slate-800 leading-relaxed whitespace-pre-line mb-4 font-body-md">
                         {msg.text}
                       </div>
 
                       {/* Interactive Answer Cards */}
                       {msg.confidence && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-outline-variant/20">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-200">
                           {/* Confidence Card */}
-                          <div className="bg-surface-container-high/50 p-3 rounded-xl border border-outline-variant/20">
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="material-symbols-outlined text-tertiary text-base">verified</span>
-                              <span className="font-label-sm text-[11px] text-on-surface-variant">Confidence Score</span>
+                          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 min-w-0 flex flex-col justify-between overflow-hidden">
+                            <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+                              <span className="material-symbols-outlined text-emerald-600 text-base shrink-0">verified</span>
+                              <span className="font-bold text-xs text-slate-700 truncate">Confidence Score</span>
                             </div>
-                            <div className="flex items-end gap-2">
-                              <span className="text-2xl font-bold text-tertiary">{msg.confidence}%</span>
-                              <span className="text-[10px] text-on-surface-variant mb-1">High Accuracy</span>
+                            <div className="flex items-baseline justify-between gap-1 mt-1">
+                              <span className="text-xl font-extrabold text-emerald-600 leading-none">{msg.confidence}%</span>
+                              <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">High Accuracy</span>
                             </div>
-                            <div className="mt-2 w-full h-1 bg-outline-variant/30 rounded-full overflow-hidden">
-                              <div className="h-full bg-tertiary" style={{ width: `${msg.confidence}%` }}></div>
+                            <div className="mt-2.5 w-full h-1 bg-slate-200 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${msg.confidence}%` }}></div>
                             </div>
                           </div>
 
                           {/* Source Context Card */}
-                          <div className="bg-surface-container-high/50 p-3 rounded-xl border border-outline-variant/20">
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="material-symbols-outlined text-primary text-base">description</span>
-                              <span className="font-label-sm text-[11px] text-on-surface-variant">Source Context</span>
+                          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 min-w-0 flex flex-col justify-between overflow-hidden">
+                            <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+                              <span className="material-symbols-outlined text-blue-600 text-base shrink-0">description</span>
+                              <span className="font-bold text-xs text-slate-700 truncate">Source Context</span>
                             </div>
-                            <div className="flex -space-x-1.5 items-center">
-                              <div className="w-7 h-7 rounded border border-outline-variant bg-surface flex items-center justify-center">
-                                <span className="material-symbols-outlined text-xs text-primary">picture_as_pdf</span>
+                            <div className="flex -space-x-1.5 items-center my-1">
+                              <div className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center shadow-2xs">
+                                <span className="material-symbols-outlined text-[13px] text-blue-600">picture_as_pdf</span>
                               </div>
-                              <div className="w-7 h-7 rounded border border-outline-variant bg-surface flex items-center justify-center">
-                                <span className="material-symbols-outlined text-xs text-secondary">description</span>
+                              <div className="w-6 h-6 rounded border border-slate-200 bg-white flex items-center justify-center shadow-2xs">
+                                <span className="material-symbols-outlined text-[13px] text-purple-600">description</span>
                               </div>
-                              <div className="w-7 h-7 rounded-full border border-outline-variant bg-surface-container-highest flex items-center justify-center text-[10px] font-bold text-on-surface">
+                              <div className="w-6 h-6 rounded-full border border-slate-200 bg-slate-100 flex items-center justify-center text-[9px] font-bold text-slate-700">
                                 +{msg.sources?.length || 2}
                               </div>
                             </div>
-                            <p className="mt-2 text-[10px] text-on-surface-variant font-mono truncate">
+                            <p className="mt-1 text-[10px] text-slate-500 font-mono truncate w-full" title={msg.sources?.[0] || 'HIPAA_SubPart_C.pdf'}>
                               Ref: {msg.sources?.[0] || 'HIPAA_SubPart_C.pdf'}
                             </p>
                           </div>
 
                           {/* Knowledge Nodes Card */}
-                          <div className="bg-surface-container-high/50 p-3 rounded-xl border border-outline-variant/20">
-                            <div className="flex items-center gap-1.5 mb-2">
-                              <span className="material-symbols-outlined text-secondary text-base">hub</span>
-                              <span className="font-label-sm text-[11px] text-on-surface-variant">Knowledge Nodes</span>
+                          <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 min-w-0 flex flex-col justify-between overflow-hidden">
+                            <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
+                              <span className="material-symbols-outlined text-purple-600 text-base shrink-0">hub</span>
+                              <span className="font-bold text-xs text-slate-700 truncate">Knowledge Nodes</span>
                             </div>
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
                               {msg.nodes?.map((node, i) => (
                                 <span
                                   key={i}
-                                  className="bg-secondary/10 text-secondary text-[9px] px-1.5 py-0.5 rounded border border-secondary/20 font-bold"
+                                  className="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] px-2 py-0.5 rounded font-semibold font-mono truncate max-w-full"
+                                  title={node}
                                 >
                                   {node}
                                 </span>
@@ -277,19 +278,19 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
 
                       {/* Interactive Citations */}
                       {msg.citations && (
-                        <div className="mt-4 pt-3 border-t border-outline-variant/10">
-                          <span className="text-[10px] font-bold text-outline uppercase tracking-widest mb-2 block">
+                        <div className="mt-4 pt-3 border-t border-slate-200">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">
                             Interactive Citations
                           </span>
                           <div className="flex flex-wrap gap-2">
                             {msg.citations.map((cite, i) => (
                               <button
                                 key={i}
-                                className="group flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-container-highest border border-outline-variant/20 px-3 py-1 rounded-full transition-all text-xs text-on-surface-variant hover:text-primary cursor-pointer"
+                                className="group flex items-center gap-1.5 bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 px-3 py-1 rounded-full transition-all text-xs text-slate-700 hover:text-blue-700 font-medium cursor-pointer"
                               >
-                                <span className="material-symbols-outlined text-xs text-primary">bookmark</span>
-                                <span>{cite}</span>
-                                <span className="material-symbols-outlined text-xs text-outline group-hover:text-primary">
+                                <span className="material-symbols-outlined text-xs text-blue-600">bookmark</span>
+                                <span className="truncate max-w-[180px]">{cite}</span>
+                                <span className="material-symbols-outlined text-xs text-slate-400 group-hover:text-blue-600">
                                   open_in_new
                                 </span>
                               </button>
@@ -306,12 +307,12 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
 
           {isSending && (
             <div className="flex justify-start items-start gap-3 animate-pulse">
-              <div className="w-8 h-8 rounded-full bg-primary flex-shrink-0 flex items-center justify-center text-on-primary">
+              <div className="w-8 h-8 rounded-full bg-blue-600 flex-shrink-0 flex items-center justify-center text-white">
                 <span className="material-symbols-outlined text-sm fill">auto_awesome</span>
               </div>
-              <div className="p-4 border-l-2 border-primary/40 bg-primary/5 rounded-r-xl max-w-lg">
-                <p className="font-body-md text-xs text-on-surface flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
+              <div className="p-4 border-l-3 border-blue-600 bg-blue-50/70 rounded-r-xl max-w-lg">
+                <p className="font-body-md text-xs text-blue-900 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
                   Querying Gemini Compliance Engine & graph relationship index...
                 </p>
               </div>
@@ -329,112 +330,112 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
               <button
                 key={idx}
                 onClick={() => handleSendMessage(prompt.label)}
-                className="flex-shrink-0 bg-surface-container-low hover:bg-surface-container-highest border border-outline-variant/20 px-3.5 py-1.5 rounded-xl text-xs text-on-surface-variant hover:text-primary transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+                className="flex-shrink-0 bg-white hover:bg-slate-100 border border-slate-200 px-3.5 py-1.5 rounded-xl text-xs text-slate-700 hover:text-blue-600 transition-all flex items-center gap-2 cursor-pointer active:scale-95 shadow-2xs"
               >
-                <span className="material-symbols-outlined text-sm">{prompt.icon}</span>
+                <span className="material-symbols-outlined text-sm text-blue-600">{prompt.icon}</span>
                 <span>{prompt.label}</span>
               </button>
             ))}
           </div>
 
           {/* Textarea Box */}
-          <div className="relative glass-card p-2 rounded-2xl border-outline-variant/30 focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-2xl">
+          <div className="relative bg-white p-2 rounded-2xl border border-slate-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-600/15 transition-all shadow-sm">
             <textarea
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               rows={2}
               placeholder="Ask anything about your compliance posture..."
-              className="w-full bg-transparent border-none focus:outline-none text-on-surface font-body-md text-sm placeholder:text-outline p-3 resize-none"
+              className="w-full bg-transparent border-none focus:outline-none text-slate-900 font-body-md text-sm placeholder:text-slate-400 p-3 resize-none"
             />
             <div className="flex items-center justify-between px-3 pb-1">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => onNavigate('upload')}
-                  className="p-1.5 text-outline hover:text-primary transition-colors cursor-pointer"
+                  className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
                   title="Upload Asset"
                 >
                   <span className="material-symbols-outlined text-lg">attach_file</span>
                 </button>
                 <button
-                  className="p-1.5 text-outline hover:text-primary transition-colors cursor-pointer"
+                  className="p-1.5 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
                   title="Voice Input"
                 >
                   <span className="material-symbols-outlined text-lg">mic</span>
                 </button>
-                <div className="h-4 w-px bg-outline-variant/30 mx-1"></div>
-                <span className="text-[10px] text-outline font-mono">Press ⌘ + Enter to send</span>
+                <div className="h-4 w-px bg-slate-200 mx-1"></div>
+                <span className="text-[10px] text-slate-400 font-mono">Press ⌘ + Enter to send</span>
               </div>
               <button
                 onClick={() => handleSendMessage()}
                 disabled={!inputText.trim() || isSending}
-                className="bg-primary text-on-primary p-2 rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shadow-primary/20 cursor-pointer disabled:opacity-40"
+                className="bg-blue-600 text-white p-2 rounded-xl flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-all shadow-sm cursor-pointer disabled:opacity-40"
               >
                 <span className="material-symbols-outlined text-lg font-bold">arrow_upward</span>
               </button>
             </div>
           </div>
-          <p className="text-center text-[10px] text-outline">
+          <p className="text-center text-[10px] text-slate-400">
             GraphAI can make mistakes. Verify critical information against original policy documents.
           </p>
         </div>
       </section>
 
       {/* Right Context Inspector Sidebar */}
-      <aside className="w-80 bg-surface-container/30 border-l border-outline-variant/20 flex flex-col hidden lg:flex">
-        <div className="p-4 border-b border-outline-variant/10 flex items-center gap-2">
-          <span className="material-symbols-outlined text-secondary">analytics</span>
-          <span className="font-label-md text-xs font-bold text-on-surface">Live Graph Inspector</span>
+      <aside className="w-80 bg-white border-l border-slate-200 flex flex-col hidden lg:flex">
+        <div className="p-4 border-b border-slate-200 flex items-center gap-2">
+          <span className="material-symbols-outlined text-purple-600">analytics</span>
+          <span className="font-label-md text-xs font-bold text-slate-900">Live Graph Inspector</span>
         </div>
 
         <div className="flex-1 p-4 space-y-6 overflow-y-auto">
           <div>
-            <span className="text-[10px] font-bold text-outline uppercase tracking-widest mb-3 block">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">
               Detected Entities
             </span>
             <div className="space-y-2.5">
-              <div className="p-3 bg-surface-container rounded-xl border border-outline-variant/20">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-primary">Patient_PHI_Cluster</span>
-                  <span className="material-symbols-outlined text-xs text-on-surface-variant">info</span>
+                  <span className="text-xs font-bold text-blue-600">Patient_PHI_Cluster</span>
+                  <span className="material-symbols-outlined text-xs text-slate-400">info</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex-1 h-1 bg-outline-variant rounded-full overflow-hidden">
-                    <div className="h-full bg-error w-3/4"></div>
+                  <div className="flex-1 h-1 bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-red-500 w-3/4"></div>
                   </div>
-                  <span className="text-[10px] text-error font-bold">Critical</span>
+                  <span className="text-[10px] text-red-600 font-bold">Critical</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-surface-container rounded-xl border border-outline-variant/20">
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                 <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-xs font-bold text-secondary">Internal_S3_Bucket</span>
-                  <span className="material-symbols-outlined text-xs text-on-surface-variant">info</span>
+                  <span className="text-xs font-bold text-purple-600">Internal_S3_Bucket</span>
+                  <span className="material-symbols-outlined text-xs text-slate-400">info</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="flex-1 h-1 bg-outline-variant rounded-full overflow-hidden">
-                    <div className="h-full bg-tertiary w-1/2"></div>
+                  <div className="flex-1 h-1 bg-slate-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500 w-1/2"></div>
                   </div>
-                  <span className="text-[10px] text-tertiary font-bold">Safe</span>
+                  <span className="text-[10px] text-emerald-600 font-bold">Safe</span>
                 </div>
               </div>
             </div>
           </div>
 
           <div>
-            <span className="text-[10px] font-bold text-outline uppercase tracking-widest mb-3 block">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">
               Graph Visualization
             </span>
-            <div className="aspect-video glass-card rounded-xl overflow-hidden relative group cursor-pointer border border-outline-variant/20 canvas-grid flex items-center justify-center">
+            <div className="aspect-video bg-slate-50 rounded-xl overflow-hidden relative group cursor-pointer border border-slate-200 canvas-grid flex items-center justify-center shadow-2xs">
               <div className="text-center p-3">
-                <span className="material-symbols-outlined text-primary text-3xl mb-1">hub</span>
-                <p className="text-[11px] text-on-surface font-bold">Interactive Graph Active</p>
-                <p className="text-[9px] text-on-surface-variant">5 Connected Nodes</p>
+                <span className="material-symbols-outlined text-blue-600 text-3xl mb-1">hub</span>
+                <p className="text-[11px] text-slate-900 font-bold">Interactive Graph Active</p>
+                <p className="text-[9px] text-slate-500">5 Connected Nodes</p>
               </div>
-              <div className="absolute inset-0 bg-surface/60 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="absolute inset-0 bg-white/70 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => onNavigate('explorer')}
-                  className="bg-primary/90 text-on-primary px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  className="bg-blue-600 text-white px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-blue-700 active:scale-95 transition-all cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-sm">fullscreen</span>
                   Expand Graph
@@ -443,12 +444,12 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="p-4 bg-tertiary/10 border border-tertiary/20 rounded-2xl">
-            <h4 className="text-xs font-bold text-tertiary flex items-center gap-1.5 mb-1.5">
-              <span className="material-symbols-outlined text-sm">check_circle</span>
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+            <h4 className="text-xs font-bold text-emerald-800 flex items-center gap-1.5 mb-1.5">
+              <span className="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
               Compliance Status: OK
             </h4>
-            <p className="text-[11px] text-on-surface-variant leading-relaxed">
+            <p className="text-[11px] text-emerald-700 leading-relaxed">
               Your overall compliance score has improved by 4% after the last automated remediation.
             </p>
           </div>

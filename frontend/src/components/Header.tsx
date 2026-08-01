@@ -104,13 +104,6 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
           )}
         </div>
 
-        <button
-          className="p-2 text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-full transition-all duration-200 cursor-pointer"
-          title="Light Mode Active"
-        >
-          <span className="material-symbols-outlined text-xl">light_mode</span>
-        </button>
-
         <div className="h-6 w-[1px] bg-slate-200"></div>
 
         <div className="flex items-center gap-3 cursor-pointer p-1 rounded-xl hover:bg-slate-50 transition-colors">
