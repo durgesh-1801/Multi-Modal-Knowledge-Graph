@@ -1,0 +1,6 @@
+{
+  "name": "Enterprise AI - Compliance Engine",
+  "description": "Interactive compliance knowledge graph dashboard, multi-modal upload center, real-time extraction pipeline, AI compliance chat, and graph explorer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

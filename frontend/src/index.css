@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --color-surface: #0b1326;
+    --color-surface-dim: #0b1326;
+    --color-surface-bright: #31394d;
+    --color-surface-container-lowest: #060e20;
+    --color-surface-container-low: #131b2e;
+    --color-surface-container: #171f33;
+    --color-surface-container-high: #222a3d;
+    --color-surface-container-highest: #2d3449;
+    --color-on-surface: #dae2fd;
+    --color-on-surface-variant: #c2c6d6;
+    --color-outline: #8c909f;
+    --color-outline-variant: #424754;
+    --color-primary: #adc6ff;
+    --color-on-primary: #002e6a;
+    --color-primary-container: #4d8eff;
+    --color-on-primary-container: #00285d;
+    --color-secondary: #d0bcff;
+    --color-on-secondary: #3c0091;
+    --color-secondary-container: #571bc1;
+    --color-on-secondary-container: #c4abff;
+    --color-tertiary: #4edea3;
+    --color-on-tertiary: #003824;
+    --color-tertiary-container: #00a572;
+    --color-on-tertiary-container: #00311f;
+    --color-error: #ffb4ab;
+    --color-on-error: #690005;
+    --color-error-container: #93000a;
+    --color-on-error-container: #ffdad6;
+    --color-background: #0b1326;
+    --color-on-background: #dae2fd;
+  }
+
+  body {
+    background-color: #0b1326;
+    color: #dae2fd;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Geist', sans-serif;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'Geist Mono', monospace;
+  }
+}
+
+/* Custom Tailwind CSS class mappings */
+.bg-surface { background-color: #0b1326; }
+.bg-surface-container-lowest { background-color: #060e20; }
+.bg-surface-container-low { background-color: #131b2e; }
+.bg-surface-container { background-color: #171f33; }
+.bg-surface-container-high { background-color: #222a3d; }
+.bg-surface-container-highest { background-color: #2d3449; }
+
+.bg-primary { background-color: #adc6ff; }
+.bg-primary-container { background-color: #4d8eff; }
+.bg-secondary { background-color: #d0bcff; }
+.bg-secondary-container { background-color: #571bc1; }
+.bg-tertiary { background-color: #4edea3; }
+.bg-tertiary-container { background-color: #00a572; }
+.bg-error { background-color: #ffb4ab; }
+.bg-error-container { background-color: #93000a; }
+
+.text-primary { color: #adc6ff; }
+.text-on-primary { color: #002e6a; }
+.text-on-primary-container { color: #00285d; }
+.text-secondary { color: #d0bcff; }
+.text-on-secondary-container { color: #c4abff; }
+.text-tertiary { color: #4edea3; }
+.text-error { color: #ffb4ab; }
+.text-on-surface { color: #dae2fd; }
+.text-on-surface-variant { color: #c2c6d6; }
+.text-outline { color: #8c909f; }
+
+.border-outline-variant { border-color: #424754; }
+.border-outline { border-color: #8c909f; }
+
+/* Material Symbols styling */
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined';
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.material-symbols-outlined.fill {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Glass & Glow utilities */
+.glass-card {
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.node-glow {
+  box-shadow: 0 0 15px rgba(173, 198, 255, 0.3);
+}
+
+.canvas-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 0);
+  background-size: 32px 32px;
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+.edge-flow {
+  stroke-dasharray: 8 6;
+  animation: dash 25s linear infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #2d3449;
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #424754;
+}
