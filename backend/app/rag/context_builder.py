@@ -59,8 +59,22 @@ class ContextBuilder:
 
         combined_str = "\n".join(context_lines)
 
+        converted_graph_nodes: List[RAGGraphNode] = []
+        for gn in graph_nodes:
+            if isinstance(gn, RAGGraphNode):
+                converted_graph_nodes.append(gn)
+            else:
+                converted_graph_nodes.append(
+                    RAGGraphNode(
+                        id=getattr(gn, "id", gn.name),
+                        name=gn.name,
+                        label=getattr(gn, "type", getattr(gn, "label", "Entity")),
+                        properties=getattr(gn, "properties", {}),
+                    )
+                )
+
         return Context(
             vector_context=chunks,
-            graph_context=graph_nodes,
+            graph_context=converted_graph_nodes,
             combined_context=combined_str,
         )

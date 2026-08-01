@@ -2,36 +2,45 @@
 Document Upload & PDF Ingestion API Router.
 
 Provides endpoints for ingesting, validating, storing, and parsing PDF compliance files.
-Supports single and batch PDF uploads, PyMuPDF + pdfplumber text parsing, and Camelot + pdfplumber table extractions.
+Supports single and batch PDF uploads, PyMuPDF + pdfplumber text parsing, structured table extractions,
+and AUTOMATIC Knowledge Graph construction (Text Extraction -> Chunking & Vector DB -> Entity Extraction -> Relationship Extraction -> Neo4j Graph Storage).
 """
 
 from typing import Any, List, Union
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.core.logging import logger
+from app.dependencies import get_graph_interface
+from app.rag.graph_interface import AbstractGraphInterface
 from app.schemas.common import StandardResponse
 from app.schemas.upload import PDFProcessedData
+from app.services.entity_extractor import EntityExtractor
 from app.services.file_manager import FileManager
+from app.services.graph_builder import GraphBuilderService
 from app.services.pdf_parser import PDFParser
+from app.services.relationship_extractor import RelationshipExtractor
 from app.services.table_parser import TableParser
+from app.vector.vector_store import VectorStoreService
 
 router = APIRouter()
 
-# Initialize singleton service instances for upload router
+# Initialize service instances for upload router
 file_manager = FileManager()
 pdf_parser = PDFParser()
 table_parser = TableParser()
+vector_store = VectorStoreService()
+entity_extractor = EntityExtractor()
+relationship_extractor = RelationshipExtractor()
 
 
 @router.post(
     "/pdf",
     response_model=StandardResponse[Union[PDFProcessedData, List[PDFProcessedData]]],
     status_code=status.HTTP_200_OK,
-    summary="Upload and Parse PDF Compliance Documents",
+    summary="Upload, Parse & Process PDF Compliance Documents into Knowledge Graph",
     description=(
-        "Ingests single or multiple PDF files, validates file integrity, saves files to disk, "
-        "extracts header metadata and page text, extracts structured tables, and returns "
-        "a clean JSON payload for downstream processing modules."
+        "Ingests PDF compliance files, validates integrity, extracts text/tables, stores dense vector chunks "
+        "in Qdrant, extracts & normalizes entities and relationships, and automatically builds the Neo4j Knowledge Graph."
     ),
 )
 async def upload_pdf(
@@ -39,20 +48,11 @@ async def upload_pdf(
         ...,
         description="One or multiple PDF compliance documents to upload.",
     ),
+    graph_db: AbstractGraphInterface = Depends(get_graph_interface),
 ) -> StandardResponse[Union[PDFProcessedData, List[PDFProcessedData]]]:
     """
-    Handles PDF document upload, validation, disk persistence, text extraction, and table extraction.
-
-    Args:
-        files: List of FastAPI UploadFile objects received via multipart/form-data.
-
-    Returns:
-        StandardResponse containing parsed PDF document details, page text, and extracted tables.
-
-    Raises:
-        HTTPException: 400 Bad Request if file is missing, empty, password-protected, or corrupted.
-        HTTPException: 413 Payload Too Large if file size exceeds configured limits.
-        HTTPException: 422 Unprocessable Entity if uploaded file is not a PDF.
+    Handles PDF document upload, disk persistence, text/table parsing, Qdrant vector storage,
+    entity/relationship extraction, and automatic Neo4j Knowledge Graph construction.
     """
     if not files or len(files) == 0:
         logger.warning("Upload request received with no files attached.")
@@ -61,13 +61,14 @@ async def upload_pdf(
             detail="No files provided in upload request.",
         )
 
+    graph_builder = GraphBuilderService(graph_db=graph_db)
     processed_results: List[PDFProcessedData] = []
 
     for file in files:
         original_filename = file.filename or "uploaded_document.pdf"
         logger.info(f"Processing upload request for file: '{original_filename}'")
 
-        # 1. Validate PDF file (checks extension, magic bytes, size, password protection, corruption)
+        # 1. Validate PDF file
         binary_content = await file_manager.validate_pdf(file)
 
         # 2. Generate unique storage filename and persist to disk
@@ -75,17 +76,57 @@ async def upload_pdf(
         saved_path = file_manager.save_file(binary_content, unique_filename)
 
         try:
-            # 3. Parse Metadata and Page Text (PyMuPDF primary, pdfplumber fallback)
+            # 3. Parse Metadata and Page Text
             metadata, pages = pdf_parser.parse_bytes(binary_content)
 
-            # Preserve original filename in metadata title if title is empty
             if not metadata.title:
                 metadata.title = original_filename
 
-            # 4. Extract Structured Tables (Camelot primary, pdfplumber fallback)
+            # 4. Extract Structured Tables
             tables = table_parser.parse_file(saved_path)
 
-            # 5. Assemble structured response data object
+            # Assemble full document text
+            combined_text = "\n\n".join(
+                [f"Page {getattr(p, 'page', getattr(p, 'page_number', 1))}:\n{p.text}" for p in pages if p.text]
+            )
+
+            if combined_text.strip():
+                # 5. Chunking & Qdrant Vector DB Storage
+                logger.info(f"Storing vector embeddings for '{unique_filename}' in Qdrant")
+                vector_store.process_and_store_document(
+                    document_id=unique_filename,
+                    text=combined_text,
+                    source_type="pdf",
+                    original_filename=original_filename,
+                )
+
+                # 6. Hybrid Entity Extraction
+                logger.info(f"Extracting entities for '{unique_filename}'")
+                entity_res = await entity_extractor.extract_entities_async(
+                    text=combined_text,
+                    enable_spacy=True,
+                    enable_rules=True,
+                    enable_gemini=False,  # Fallback to rules/spacy when offline
+                )
+
+                # 7. Hybrid Relationship Extraction
+                logger.info(f"Extracting relationships for '{unique_filename}'")
+                rel_res = await relationship_extractor.extract_relationships_async(
+                    text=combined_text,
+                    entities=entity_res.entities,
+                    enable_rules=True,
+                    enable_gemini=False,
+                )
+
+                # 8. Automatic Neo4j Knowledge Graph Construction
+                logger.info(f"Building Neo4j Knowledge Graph for '{unique_filename}'")
+                graph_builder.build_graph_from_extraction(
+                    entities=entity_res.entities,
+                    relationships=rel_res.relationships,
+                    document_id=unique_filename,
+                )
+
+            # 9. Assemble structured response payload
             processed_data = PDFProcessedData(
                 file_name=original_filename,
                 saved_filename=unique_filename,
@@ -101,19 +142,17 @@ async def upload_pdf(
                 f"Extraction failure while processing '{original_filename}': {parse_error}",
                 exc_info=True,
             )
-            # Cleanup saved file on processing failure
             file_manager.delete_file(saved_path)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to extract content from PDF '{original_filename}': {str(parse_error)}",
+                detail=f"Failed to process PDF '{original_filename}': {str(parse_error)}",
             )
 
-    # Determine response payload shape (single object or list)
     response_payload: Union[PDFProcessedData, List[PDFProcessedData]] = (
         processed_results[0] if len(processed_results) == 1 else processed_results
     )
 
-    logger.info(f"Successfully processed {len(processed_results)} PDF file(s).")
+    logger.info(f"Successfully processed and ingested {len(processed_results)} PDF file(s) into Knowledge Graph.")
 
     return StandardResponse[Union[PDFProcessedData, List[PDFProcessedData]]](
         success=True,

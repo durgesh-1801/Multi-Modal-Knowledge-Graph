@@ -5,7 +5,7 @@ Provides Stage 1 Named Entity Recognition using spaCy en_core_web_sm model
 to extract general entities: PERSON, ORG, DATE, GPE, LOC, PRODUCT, EVENT, MONEY, TIME, NORP.
 """
 
-from typing import List
+from typing import Any, List
 from app.core.logging import logger
 from app.schemas.entity import Entity
 

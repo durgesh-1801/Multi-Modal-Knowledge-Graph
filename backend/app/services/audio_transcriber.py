@@ -8,7 +8,7 @@ speaker labels, language detection, and execution metadata.
 
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 import numpy as np
 
 from app.core.config import settings

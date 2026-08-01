@@ -8,7 +8,7 @@ interface for seamless future Redis / PostgreSQL replacement.
 
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from app.core.logging import logger
 from app.schemas.chat import ChatMessage, Conversation
 

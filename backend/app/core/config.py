@@ -8,6 +8,7 @@ or defaulted to safe fallback values.
 
 from functools import lru_cache
 from typing import Optional
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,50 +16,72 @@ class Settings(BaseSettings):
     """
     Application Settings configuration schema.
 
-    Attributes:
-        APP_NAME: Name of the application.
-        APP_VERSION: Current semantic version of the API backend.
-        DEBUG: Flag to toggle development/debug features.
-        GEMINI_API_KEY: Secret key for Google Gemini API integration.
-        WHISPER_MODEL: Model size/variant for OpenAI Whisper audio transcription.
-        EMBEDDING_MODEL: HuggingFace model string for dense vector embeddings.
-        QDRANT_URL: Connection URL for Qdrant vector store.
-        QDRANT_API_KEY: Optional API key for Qdrant cloud authentication.
-        QDRANT_COLLECTION_NAME: Target collection name inside Qdrant.
-        NEO4J_URI: Bolt connection URI for Neo4j knowledge graph.
-        NEO4J_USERNAME: Username for Neo4j database authentication.
-        NEO4J_PASSWORD: Password for Neo4j database authentication.
-        UPLOAD_DIRECTORY: Local directory path for temporary file uploads.
-        MAX_UPLOAD_SIZE: Maximum allowable upload payload size in bytes.
-        LOG_LEVEL: Logging severity filter (DEBUG, INFO, WARNING, ERROR).
+    Loads values automatically from environment variables or .env file.
     """
 
-    # Application Information
-    APP_NAME: str = "Enterprise Compliance Knowledge Graph"
+    # Application Configuration
+    APP_NAME: str = "Multi-Modal Knowledge Graph"
     APP_VERSION: str = "0.1.0"
-    DEBUG: bool = False
+    APP_ENV: str = "development"
+    DEBUG: bool = True
+    HOST: str = "0.0.0.0"
+    PORT: int = 8000
 
-    # AI & Model Integrations
+    # Google Gemini AI Integration
     GEMINI_API_KEY: Optional[str] = None
-    WHISPER_MODEL: str = "large-v3"
-    EMBEDDING_MODEL: str = "BAAI/bge-large-en-v1.5"
-
-    # Vector Storage Integration (Qdrant)
-    QDRANT_URL: str = "http://localhost:6333"
-    QDRANT_API_KEY: Optional[str] = None
-    QDRANT_COLLECTION_NAME: str = "compliance_documents"
 
     # Knowledge Graph Database Integration (Neo4j)
     NEO4J_URI: str = "bolt://localhost:7687"
     NEO4J_USERNAME: str = "neo4j"
     NEO4J_PASSWORD: str = "password"
+    NEO4J_DATABASE: str = "neo4j"
+    NEO4J_MAX_CONNECTION_POOL_SIZE: int = 50
+
+    # Vector Storage Integration (Qdrant)
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
+    QDRANT_URL: Optional[str] = None
+    QDRANT_API_KEY: Optional[str] = None
+    QDRANT_COLLECTION: str = "knowledge_graph"
+    QDRANT_COLLECTION_NAME: Optional[str] = None
+
+    # Embeddings & Speech AI Models
+    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    WHISPER_MODEL: str = "large-v3"
 
     # Storage & Upload Rules
-    UPLOAD_DIRECTORY: str = "uploads"
-    MAX_UPLOAD_SIZE: int = 104857600  # 100 MB in bytes
+    UPLOAD_DIR: str = "uploads"
+    UPLOAD_DIRECTORY: Optional[str] = None
+    MAX_UPLOAD_SIZE_MB: int = 100
+    MAX_UPLOAD_SIZE: Optional[int] = None
+    TEMP_DIR: str = "temp"
+    CACHE_DIR: str = "cache"
 
     # Observability & Logging
     LOG_LEVEL: str = "INFO"
+
+    # RAG Rank Fusion Retrieval Weights
+    RAG_WEIGHT_VECTOR: float = 0.45
+    RAG_WEIGHT_GRAPH: float = 0.35
+    RAG_WEIGHT_ENTITY: float = 0.20
+
+    # LLM Parameters
+    LLM_MODEL: str = "gemini-2.5-flash"
+    TEMPERATURE: float = 0.1
+    TOP_K: int = 5
+
+    @model_validator(mode="after")
+    def populate_defaults_and_fallbacks(self) -> "Settings":
+        """Ensures dual-named variables and computed defaults are populated."""
+        if not self.QDRANT_URL:
+            self.QDRANT_URL = f"http://{self.QDRANT_HOST}:{self.QDRANT_PORT}"
+        if not self.QDRANT_COLLECTION_NAME:
+            self.QDRANT_COLLECTION_NAME = self.QDRANT_COLLECTION
+        if not self.UPLOAD_DIRECTORY:
+            self.UPLOAD_DIRECTORY = self.UPLOAD_DIR
+        if not self.MAX_UPLOAD_SIZE:
+            self.MAX_UPLOAD_SIZE = self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",

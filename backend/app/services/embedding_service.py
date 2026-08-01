@@ -6,7 +6,7 @@ Provides dense vector embedding generation using HuggingFace SentenceTransformer
 Auto-detects vector dimensions, normalizes embeddings (L2), and calculates cosine similarity.
 """
 
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 import numpy as np
 
 from app.core.config import settings
