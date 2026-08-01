@@ -18,15 +18,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
   ];
 
   return (
-    <aside className="w-60 h-screen fixed left-0 top-0 bg-surface-container border-r border-outline-variant/30 shadow-sm flex flex-col p-4 z-50">
+    <aside className="w-60 h-screen fixed left-0 top-0 bg-white border-r border-slate-200 shadow-sm flex flex-col p-4 z-50">
       {/* Brand Logo */}
       <div className="mb-8 flex items-center gap-3 px-2 cursor-pointer" onClick={() => onSelectTab('dashboard')}>
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-          <span className="material-symbols-outlined text-on-primary text-xl">hub</span>
+        <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-sm">
+          <span className="material-symbols-outlined text-white text-xl">hub</span>
         </div>
         <div>
-          <h1 className="font-headline-md text-[20px] font-bold text-primary leading-none">Enterprise AI</h1>
-          <p className="text-[10px] uppercase tracking-widest text-outline">Compliance Engine</p>
+          <h1 className="font-headline-md text-[20px] font-bold text-slate-900 leading-none">Enterprise AI</h1>
+          <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mt-0.5">Compliance Engine</p>
         </div>
       </div>
 
@@ -38,13 +38,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-left transition-all duration-150 cursor-pointer ${
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all duration-150 cursor-pointer ${
                 isActive
-                  ? 'bg-secondary-container text-on-secondary-container font-medium'
-                  : 'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface'
+                  ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium'
               }`}
             >
-              <span className={`material-symbols-outlined ${isActive ? 'fill' : ''}`}>{item.icon}</span>
+              <span className={`material-symbols-outlined ${isActive ? 'fill text-blue-600' : 'text-slate-500'}`}>{item.icon}</span>
               <span className="font-label-md text-sm">{item.label}</span>
             </button>
           );
@@ -52,26 +52,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
       </nav>
 
       {/* Settings & User Profile Footer */}
-      <div className="mt-auto pt-4 border-t border-outline-variant/20 space-y-3">
+      <div className="mt-auto pt-4 border-t border-slate-200 space-y-3">
         <button
           onClick={() => onSelectTab('settings')}
-          className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg text-left transition-all cursor-pointer ${
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-left transition-all cursor-pointer ${
             activeTab === 'settings'
-              ? 'bg-secondary-container text-on-secondary-container font-medium'
-              : 'text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface'
+              ? 'bg-blue-50 text-blue-700 font-semibold shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 font-medium'
           }`}
         >
-          <span className="material-symbols-outlined">settings</span>
+          <span className="material-symbols-outlined text-slate-500">settings</span>
           <span className="font-label-md text-sm">Settings</span>
         </button>
 
-        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-surface-container-highest transition-colors cursor-pointer">
-          <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold text-xs">
+        <div className="flex items-center gap-3 p-2 rounded-xl bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer">
+          <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-xs">
             JD
           </div>
           <div className="flex flex-col">
-            <span className="font-label-md text-xs font-bold text-on-surface">John Doe</span>
-            <span className="text-[10px] text-on-surface-variant/70 uppercase tracking-wider">Compliance Lead</span>
+            <span className="font-label-md text-xs font-bold text-slate-900">John Doe</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Compliance Lead</span>
           </div>
         </div>
       </div>
