@@ -11,7 +11,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from app.core.logging import logger
-from app.rag.graph_interface import AbstractGraphInterface
+from app.rag.graph_interface import AbstractGraphInterface, MockGraphInterface
 from app.schemas.entity import Entity
 from app.schemas.graph import GraphNode, GraphRelationship
 from app.schemas.relationship import Relationship
@@ -23,8 +23,8 @@ class GraphBuilderService:
     and edges, and persisting them in batch to the Knowledge Graph.
     """
 
-    def __init__(self, graph_db: AbstractGraphInterface) -> None:
-        self.graph_db: AbstractGraphInterface = graph_db
+    def __init__(self, graph_db: Optional[AbstractGraphInterface] = None) -> None:
+        self.graph_db: AbstractGraphInterface = graph_db or MockGraphInterface()
 
     def build_graph_from_extraction(
         self,

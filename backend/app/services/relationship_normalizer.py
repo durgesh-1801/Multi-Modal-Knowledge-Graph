@@ -149,11 +149,19 @@ class RelationshipNormalizer:
             GraphPayload: Graph-ready nodes and relationships object.
         """
         entity_label_map: Dict[str, str] = {}
+        nodes_map: Dict[str, GraphNode] = {}
+
         if known_entities:
             for ent in known_entities:
                 entity_label_map[ent.name.lower()] = ent.type
-
-        nodes_map: Dict[str, GraphNode] = {}
+                nid = self.generate_node_id(ent.name)
+                if nid not in nodes_map:
+                    nodes_map[nid] = GraphNode(
+                        id=nid,
+                        name=ent.name,
+                        label=ent.type,
+                        properties={"confidence": ent.confidence, "source": ent.source},
+                    )
 
         for rel in relationships:
             # Source Node
