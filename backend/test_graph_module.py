@@ -107,7 +107,7 @@ class TestGraphModule(unittest.TestCase):
                 name="GDPR Article 32",
                 type="Standard",
                 confidence=0.99,
-                source="Gemini",
+                source="LLM",
                 description="Security of processing",
             ),
         ]

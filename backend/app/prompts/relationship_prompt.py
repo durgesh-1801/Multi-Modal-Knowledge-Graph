@@ -1,7 +1,8 @@
 """
-Gemini Relationship Extraction Prompt Templates.
+LLM Relationship Extraction Prompt Templates.
 
-Defines prompt templates instructing Gemini to infer semantic graph relationships between compliance entities
+Defines prompt templates instructing LLM Provider to extract semantic relationships
+ between compliance entities
 and return strictly structured JSON payloads.
 """
 

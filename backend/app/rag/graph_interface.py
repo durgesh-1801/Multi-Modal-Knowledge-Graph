@@ -392,9 +392,9 @@ class Neo4jGraphInterface(AbstractGraphInterface):
     def get_subgraph(self, query: str, depth: int = 2) -> SubgraphResponse:
         cypher = """
         MATCH (n:Entity)
-        WHERE toLower(n.name) CONTAINS toLower($query)
-           OR toLower(n.type) CONTAINS toLower($query)
-           OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($query))
+        WHERE toLower(n.name) CONTAINS toLower($search_text)
+           OR toLower(n.type) CONTAINS toLower($search_text)
+           OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($search_text))
         WITH n LIMIT 20
         MATCH path = (n)-[r*1..2]-(neighbor:Entity)
         RETURN path LIMIT 100
@@ -403,7 +403,7 @@ class Neo4jGraphInterface(AbstractGraphInterface):
         edges_list: List[GraphRelationship] = []
 
         with self._driver.session(database=self.database) as session:
-            records = self._read_tx(session, lambda tx: list(tx.run(cypher, query=query)))
+            records = self._read_tx(session, lambda tx: list(tx.run(cypher, search_text=query)))
             for rec in records:
                 path = rec["path"]
                 if not path:
@@ -475,14 +475,14 @@ class Neo4jGraphInterface(AbstractGraphInterface):
     def search_graph(self, query: str) -> List[GraphNode]:
         cypher = """
         MATCH (n:Entity)
-        WHERE toLower(n.name) CONTAINS toLower($query)
-           OR toLower(n.type) CONTAINS toLower($query)
-           OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($query))
+        WHERE toLower(n.name) CONTAINS toLower($search_text)
+           OR toLower(n.type) CONTAINS toLower($search_text)
+           OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($search_text))
         RETURN n LIMIT 50
         """
         results: List[GraphNode] = []
         with self._driver.session(database=self.database) as session:
-            records = self._read_tx(session, lambda tx: list(tx.run(cypher, query=query)))
+            records = self._read_tx(session, lambda tx: list(tx.run(cypher, search_text=query)))
             for rec in records:
                 node = rec["n"]
                 nid = str(node.get("id", node.get("name")))

@@ -48,6 +48,38 @@ def test_rbac_matrix():
     print("[PASSED] RBAC matrix verification clean!")
 
 
+import pytest
+
+
+@pytest.fixture
+def auth_tokens():
+    store = RBACStore.get_instance()
+    admin_user = UserResponse(**store.get_user_by_email("admin@enterprise.com"))
+    officer_user = UserResponse(**store.get_user_by_email("officer@enterprise.com"))
+    auditor_user = UserResponse(**store.get_user_by_email("auditor@enterprise.com"))
+
+    return (
+        create_access_token(admin_user),
+        create_access_token(officer_user),
+        create_access_token(auditor_user),
+    )
+
+
+@pytest.fixture
+def admin_token(auth_tokens):
+    return auth_tokens[0]
+
+
+@pytest.fixture
+def officer_token(auth_tokens):
+    return auth_tokens[1]
+
+
+@pytest.fixture
+def auditor_token(auth_tokens):
+    return auth_tokens[2]
+
+
 def test_jwt_generation_and_headers():
     print("\n--- Testing JWT Token Generation and Auth Headers ---")
     store = RBACStore.get_instance()
@@ -67,7 +99,6 @@ def test_jwt_generation_and_headers():
     assert officer_token is not None
     assert auditor_token is not None
     print("[PASSED] JWT token generation clean!")
-    return admin_token, officer_token, auditor_token
 
 
 def test_user_management_api_protection(admin_token, officer_token, auditor_token):

@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage, ChatSession, NavigationTab } from '../types';
+import { useSendMessage } from '../hooks/useChat';
 
 interface AIChatViewProps {
   onNavigate: (tab: NavigationTab) => void;
 }
 
 export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
+  const { mutateAsync: sendMessage } = useSendMessage();
   const [sessions, setSessions] = useState<ChatSession[]>([
     {
       id: 's1',
@@ -57,6 +59,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
 
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [activeSessionConversationId, setActiveSessionConversationId] = useState<string>('default');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -83,26 +86,29 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
     setIsSending(true);
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: query,
-          history: messages.map((m) => ({ role: m.sender, content: m.text })),
-        }),
+      // Call real backend: POST /api/v1/chat
+      const data = await sendMessage({
+        query,
+        conversation_id: activeSessionConversationId,
+        top_k: 5,
       });
 
-      const data = await res.json();
+      // Keep conversation ID for thread continuity
+      if (data.conversation_id) setActiveSessionConversationId(data.conversation_id);
 
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
-        text: data.text || 'Analysis completed.',
+        // Backend field: answer (not text)
+        text: data.answer || 'Analysis completed.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        confidence: data.confidence || 98,
-        sources: data.sourceContext || ['Compliance_Master.pdf'],
-        nodes: data.nodes || ['Patient_PHI_Cluster', 'Admin_Policy'],
-        citations: data.citations || ['HIPAA §164.308', 'GDPR Art. 12'],
+        confidence: Math.round((data.confidence || 0.95) * 100),
+        // Backend field: source_chunks (not sourceContext)
+        sources: data.source_chunks?.map((c) => c.source) || data.citations || [],
+        // Backend field: graph_nodes (not nodes)
+        nodes: data.graph_nodes || [],
+        citations: data.citations || [],
+        processingTime: data.processing_time_ms,
       };
 
       setMessages((prev) => [...prev, aiMsg]);
@@ -112,9 +118,9 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
         {
           id: `err-${Date.now()}`,
           sender: 'ai',
-          text: 'I encountered an issue querying the compliance engine server. Please ensure your connection and API keys are active.',
+          text: 'I encountered an issue querying the compliance engine. Please ensure the backend is running and your Gemini API key is configured.',
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          confidence: 85,
+          confidence: 0,
         },
       ]);
     } finally {
@@ -145,15 +151,17 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
           </span>
           <button
             onClick={() => {
+              const newId = `session-${Date.now()}`;
               const newS: ChatSession = {
-                id: `s-${Date.now()}`,
+                id: newId,
                 title: 'New Compliance Session',
                 preview: 'Ready for analysis query...',
                 timestamp: 'Just now',
                 active: true,
               };
               setSessions((prev) => [newS, ...prev.map((s) => ({ ...s, active: false }))]);
-              setActiveSessionId(newS.id);
+              setActiveSessionId(newId);
+              setActiveSessionConversationId(newId);
               setMessages([]);
             }}
             className="p-1 hover:bg-slate-100 rounded-lg transition-colors text-slate-500 hover:text-blue-600 cursor-pointer"
@@ -262,7 +270,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
                               <span className="font-bold text-xs text-slate-700 truncate">Knowledge Nodes</span>
                             </div>
                             <div className="flex flex-wrap gap-1 max-h-16 overflow-y-auto pr-1">
-                              {msg.nodes?.map((node, i) => (
+                              {(msg.nodes || []).map((node, i) => (
                                 <span
                                   key={i}
                                   className="bg-purple-50 text-purple-700 border border-purple-200 text-[10px] px-2 py-0.5 rounded font-semibold font-mono truncate max-w-full"
@@ -283,7 +291,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
                             Interactive Citations
                           </span>
                           <div className="flex flex-wrap gap-2">
-                            {msg.citations.map((cite, i) => (
+                            {(msg.citations || []).map((cite, i) => (
                               <button
                                 key={i}
                                 className="group flex items-center gap-1.5 bg-slate-100 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 px-3 py-1 rounded-full transition-all text-xs text-slate-700 hover:text-blue-700 font-medium cursor-pointer"
@@ -313,7 +321,7 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
               <div className="p-4 border-l-3 border-blue-600 bg-blue-50/70 rounded-r-xl max-w-lg">
                 <p className="font-body-md text-xs text-blue-900 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping"></span>
-                  Querying Gemini Compliance Engine & graph relationship index...
+                  Querying Groq Compliance Engine & graph relationship index...
                 </p>
               </div>
             </div>

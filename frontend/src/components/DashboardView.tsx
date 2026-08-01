@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { NavigationTab } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useGraphStats } from '../hooks/useGraph';
 
 interface DashboardViewProps {
   onNavigate: (tab: NavigationTab) => void;
@@ -21,11 +22,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     entities: true,
   });
 
+  const { data: graphStats, isLoading } = useGraphStats();
+
   const kpis = [
     {
       id: 'docs',
       title: 'Total Documents',
-      value: '1,248',
+      value: isLoading
+        ? '...'
+        : (graphStats?.total_documents ?? graphStats?.total_nodes ?? 0).toLocaleString(),
       change: '+12%',
       icon: 'description',
       color: 'text-primary',
@@ -35,9 +40,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     },
     {
       id: 'entities',
-      title: 'Entities Extracted',
-      value: '42.1K',
-      change: '+8%',
+      title: 'Graph Entities',
+      value: isLoading
+        ? '...'
+        : (graphStats?.total_nodes ?? 0).toLocaleString(),
+      change: isLoading
+        ? '...'
+        : typeof graphStats?.avg_degree === 'number'
+        ? `${graphStats.avg_degree.toFixed(1)} edges/node`
+        : '+8%',
       icon: 'database',
       color: 'text-secondary',
       bg: 'bg-secondary/10',
@@ -226,7 +237,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           }
 
           <div class="footer">
-            Generated automatically by Enterprise AI Compliance Engine • Powered by Gemini AI Knowledge Graph Logic
+            Generated automatically by Enterprise AI Compliance Engine • Powered by Groq AI Knowledge Graph Logic
           </div>
 
           <script>
@@ -255,9 +266,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-              {activeRole.replace('_', ' ')} Dashboard
+              {(activeRole || 'ADMIN').replace('_', ' ')} Dashboard
             </span>
-            <span className="text-xs text-slate-400 font-mono">User: {user.email}</span>
+            <span className="text-xs text-slate-400 font-mono">User: {user?.email ?? '—'}</span>
           </div>
           <h2 className="text-2xl font-bold text-slate-900">
             {activeRole === 'ADMIN' && 'Enterprise System Administration & Analytics'}
@@ -342,11 +353,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="absolute bottom-1/4 right-1/3 w-5 h-5 bg-secondary-container rounded-full node-glow"></div>
 
             {/* Connected Animated SVG Lines */}
-            <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40">
-              <path d="M25% 25% Q 30% 40%, 33% 50%" fill="transparent" stroke="#adc6ff" strokeWidth="1.5" className="edge-flow" />
-              <path d="M33% 50% L 50% 66%" fill="transparent" stroke="#adc6ff" strokeWidth="1.5" className="edge-flow" />
-              <path d="M50% 66% Q 60% 70%, 66% 75%" fill="transparent" stroke="#d0bcff" strokeWidth="1.5" className="edge-flow" />
-              <path d="M33% 50% L 75% 33%" fill="transparent" stroke="#4edea3" strokeWidth="1.5" className="edge-flow" />
+            <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-40" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <path d="M 25 25 Q 30 40 33 50" fill="transparent" stroke="#adc6ff" strokeWidth="1.5" className="edge-flow" />
+              <path d="M 33 50 L 50 66" fill="transparent" stroke="#adc6ff" strokeWidth="1.5" className="edge-flow" />
+              <path d="M 50 66 Q 60 70 66 75" fill="transparent" stroke="#d0bcff" strokeWidth="1.5" className="edge-flow" />
+              <path d="M 33 50 L 75 33" fill="transparent" stroke="#4edea3" strokeWidth="1.5" className="edge-flow" />
             </svg>
 
             {/* Active Node Floating Card */}

@@ -70,6 +70,7 @@ class ChunkingService:
                     chunk_id=cid,
                     document_id=document_id,
                     page_number=page_number,
+                    chunk_index=idx,
                     chunk_text=chunk_str,
                     metadata={
                         **metadata_base,

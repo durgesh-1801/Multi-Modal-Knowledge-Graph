@@ -21,6 +21,10 @@ class RuleRelationshipExtractor:
     # Verbal Pattern Regex rules mapping to canonical relation types
     RELATION_PATTERNS: List[Tuple[str, str, bool]] = [
         # (regex_pattern, canonical_relation, is_reverse)
+        (r"\b(follows?|complies?\s+with|adheres?\s+to|conforms?\s+to)\b", "follows", False),
+        (r"\b(is\s+)?accessible\s+(by|to)\b|\baccessed\s+by\b", "accessible_by", False),
+        (r"\b(is\s+)?retained\s+for\b|\bstored\s+for\b|\bretained\s+until\b", "retained_for", False),
+        (r"\b(is\s+)?encrypted\s+(using|with)\b|\bsecured\s+(using|with)\b", "encrypted_using", False),
         (r"\b(is\s+)?implemented\s+by\b", "implemented_by", False),
         (r"\bimplements?\b", "implements", False),
         (r"\b(is\s+)?required\s+by\b", "requires", True),
@@ -46,6 +50,8 @@ class RuleRelationshipExtractor:
         (r"\bcontains?\b", "contains", False),
         (r"\buses?|utilizes?\b", "uses", False),
         (r"\bprotects?|secures?\b", "protects", False),
+        (r"\benforces?\b", "enforces", False),
+        (r"\bapplies?\s+to\b", "applies_to", False),
     ]
 
     def extract(self, text: str, entities: List[Entity]) -> List[Relationship]:
@@ -93,28 +99,34 @@ class RuleRelationshipExtractor:
                         continue
 
                     # Substring text between entity 1 and entity 2
-                    sub_text = clean_sent[
-                        clean_sent.lower().find(e1.name.lower()) + len(e1.name) : clean_sent.lower().find(e2.name.lower())
-                    ]
+                    pos_e1 = clean_sent.lower().find(e1.name.lower())
+                    pos_e2 = clean_sent.lower().find(e2.name.lower())
+                    start_sub = pos_e1 + len(e1.name)
+                    sub_text = clean_sent[start_sub:pos_e2] if pos_e2 > start_sub else clean_sent
 
                     # Match patterns against connecting text
-                    matched_rel = self._match_pattern(sub_text)
+                    matched_rel = self._match_pattern(sub_text) or self._match_pattern(clean_sent)
                     if matched_rel:
                         rel_type, is_reverse = matched_rel
                         source_ent = e2.name if is_reverse else e1.name
                         target_ent = e1.name if is_reverse else e2.name
+                    else:
+                        # Fallback for co-occurring entities in same clause
+                        rel_type = "related_to"
+                        source_ent = e1.name
+                        target_ent = e2.name
 
-                        relationships.append(
-                            Relationship(
-                                source=source_ent,
-                                target=target_ent,
-                                relation=rel_type,
-                                confidence=0.92,
-                                source_engine="Rule-Based",
-                                reason=f"Matched verbal rule in sentence: '{clean_sent[:80]}...'",
-                                metadata={"sentence": clean_sent},
-                            )
+                    relationships.append(
+                        Relationship(
+                            source=source_ent,
+                            target=target_ent,
+                            relation=rel_type,
+                            confidence=0.88,
+                            source_engine="Rule-Based",
+                            reason=f"Co-occurrence / pattern match in sentence: '{clean_sent[:80]}...'",
+                            metadata={"sentence": clean_sent},
                         )
+                    )
 
         logger.info(f"Rule-Based Relationship Extractor identified {len(relationships)} edges.")
         return relationships

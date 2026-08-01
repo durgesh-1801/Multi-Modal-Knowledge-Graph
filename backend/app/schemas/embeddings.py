@@ -17,6 +17,7 @@ class Chunk(BaseModel):
     chunk_id: str = Field(..., description="Unique chunk identifier.")
     document_id: str = Field(..., description="Associated document identifier.")
     page_number: int = Field(default=1, ge=1, description="1-indexed page number.")
+    chunk_index: int = Field(default=0, ge=0, description="0-indexed chunk sequence position.")
     chunk_text: str = Field(..., description="Raw text content of the chunk.")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Custom chunk metadata."
@@ -28,6 +29,7 @@ class Chunk(BaseModel):
                 "chunk_id": "doc_123_chk_0",
                 "document_id": "doc_123",
                 "page_number": 4,
+                "chunk_index": 0,
                 "chunk_text": "Access control policies must mandate 2FA across all administrative sessions...",
                 "metadata": {"source_type": "pdf", "original_filename": "policy_2026.pdf"},
             }
@@ -43,6 +45,7 @@ class EmbeddingMetadata(BaseModel):
     document_id: str = Field(..., description="Unique document ID.")
     chunk_id: str = Field(..., description="Unique chunk ID.")
     page_number: int = Field(default=1, description="Page number of the chunk.")
+    chunk_index: int = Field(default=0, description="0-indexed chunk sequence number.")
     source_type: str = Field(
         default="pdf", description="Source document format (e.g. pdf, ocr, audio, table)."
     )

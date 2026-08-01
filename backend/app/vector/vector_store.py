@@ -18,7 +18,7 @@ from app.schemas.embeddings import (
     VectorSearchResponse,
 )
 from app.services.chunking_service import ChunkingService
-from app.services.embedding_service import EmbeddingService
+from app.services.embedding_service import EmbeddingService, get_embedding_service
 from app.vector.qdrant_client import QdrantClientManager
 
 
@@ -30,7 +30,7 @@ class VectorStoreService:
 
     def __init__(self) -> None:
         self.chunker: ChunkingService = ChunkingService()
-        self.embedder: EmbeddingService = EmbeddingService()
+        self.embedder: EmbeddingService = get_embedding_service()
         self.qdrant: QdrantClientManager = QdrantClientManager()
         self.collection_name: str = settings.QDRANT_COLLECTION_NAME
 
@@ -90,27 +90,37 @@ class VectorStoreService:
         vector_dim = self.embedder.get_dimension()
 
         # 3. Assemble Point IDs, Vectors, and Payloads
+        import uuid
         point_ids: List[str] = []
         vectors: List[List[float]] = []
         payloads: List[Dict[str, Any]] = []
 
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        for chunk, vec in chunk_vector_pairs:
+        for idx, (chunk, vec) in enumerate(chunk_vector_pairs):
+            chunk_idx = getattr(chunk, "chunk_index", idx)
+            valid_uuid_point_id = str(
+                uuid.uuid5(
+                    uuid.NAMESPACE_URL,
+                    f"{document_id}_{chunk.page_number}_{chunk_idx}"
+                )
+            )
             meta = EmbeddingMetadata(
                 document_id=document_id,
                 chunk_id=chunk.chunk_id,
                 page_number=page_number,
+                chunk_index=chunk_idx,
                 source_type=source_type,
                 original_filename=original_filename,
                 timestamp=now_iso,
             )
 
-            point_ids.append(chunk.chunk_id)
+            point_ids.append(valid_uuid_point_id)
             vectors.append(vec)
             payloads.append(
                 {
                     **meta.model_dump(),
+                    "point_id": valid_uuid_point_id,
                     "text": chunk.chunk_text,
                     "char_length": len(chunk.chunk_text),
                 }

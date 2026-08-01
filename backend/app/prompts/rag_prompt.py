@@ -1,7 +1,6 @@
 """
 Graph RAG System Prompt Templates.
-
-Defines prompt templates instructing Gemini to generate strictly grounded,
+Defines prompt templates instructing LLM Provider to generate strictly grounded,
 anti-hallucination answers backed by citations and retrieved Knowledge Graph context.
 """
 

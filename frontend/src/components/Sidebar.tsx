@@ -109,12 +109,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
 
         <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-xs">
-            {user.name.split(' ').map((n) => n[0]).join('')}
+            {(user?.name || user?.email || 'U').split(' ').map((n) => n[0]).join('')}
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-label-md text-xs font-bold text-slate-900 truncate">{user.name}</span>
+            <span className="font-label-md text-xs font-bold text-slate-900 truncate">{user?.name ?? 'User'}</span>
             <span className="text-[9px] text-blue-700 font-bold uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded w-fit border border-blue-200 mt-0.5">
-              {activeRole.replace('_', ' ')}
+              {(activeRole || 'ADMIN').replace('_', ' ')}
             </span>
           </div>
         </div>

@@ -25,6 +25,13 @@ from app.core.logging import logger, setup_logging
 from app.schemas.common import StandardResponse
 
 
+from app.core.llm_provider import get_llm_provider_instance
+from app.dependencies import get_graph_interface
+from app.services.embedding_service import get_embedding_service
+from app.services.spacy_extractor import SpacyExtractor
+from app.vector.qdrant_client import QdrantClientManager
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """
@@ -38,6 +45,63 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     upload_dir = Path(settings.UPLOAD_DIRECTORY)
     upload_dir.mkdir(parents=True, exist_ok=True)
     logger.info(f"Upload directory configured at: '{upload_dir.resolve()}'")
+
+    # 3. Startup Diagnostics Report
+    logger.info("====================================================")
+    logger.info("           STARTUP DIAGNOSTICS REPORT               ")
+    logger.info("====================================================")
+
+    # Validate Groq LLM Provider
+    try:
+        llm = get_llm_provider_instance()
+        if settings.GROQ_API_KEY:
+            logger.info("✓ Groq Connected")
+        else:
+            logger.info(f"✓ LLM Provider Connected ({llm.provider_name})")
+    except Exception as err:
+        logger.warning(f"✗ LLM Provider Check Warning: {err}")
+
+    # Validate Neo4j Knowledge Graph DB
+    try:
+        graph_interface = get_graph_interface(settings=settings)
+        if graph_interface:
+            logger.info("✓ Neo4j Connected")
+        else:
+            logger.warning("✗ Neo4j Check Warning: Interface not initialized")
+    except Exception as err:
+        logger.warning(f"✗ Neo4j Check Warning: {err}")
+
+    # Validate Qdrant Vector Store
+    try:
+        qdrant_mgr = QdrantClientManager()
+        q_client = qdrant_mgr.connect()
+        if qdrant_mgr.url and "cloud.qdrant.io" in qdrant_mgr.url:
+            logger.info("✓ Qdrant Cloud Connected")
+        else:
+            logger.info("✓ Qdrant Connected")
+    except Exception as err:
+        logger.warning(f"✗ Qdrant Check Warning: {err}")
+
+    # Validate spaCy NER Model
+    try:
+        spacy_ext = SpacyExtractor()
+        nlp = spacy_ext._load_spacy()
+        if hasattr(nlp, "pipe") and nlp != "FALLBACK":
+            logger.info("✓ spaCy Model Loaded")
+        else:
+            logger.warning("✗ spaCy Model Check Warning: Fallback model active")
+    except Exception as err:
+        logger.warning(f"✗ spaCy Check Warning: {err}")
+
+    # Validate Embedding Model Singleton
+    try:
+        embed_svc = get_embedding_service()
+        embed_svc.load_model()
+        logger.info("✓ Embedding Model Ready")
+    except Exception as err:
+        logger.warning(f"✗ Embedding Model Check Warning: {err}")
+
+    logger.info("====================================================")
 
     yield
 
@@ -60,13 +124,32 @@ app = FastAPI(
 # -----------------------------------------------------------------------------
 # CORS Middleware Configuration
 # -----------------------------------------------------------------------------
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permits local frontend connectivity during development
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1):(3000|5173)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def _attach_cors_headers(response: JSONResponse, request: Request) -> JSONResponse:
+    """Ensures exception responses include Access-Control-Allow-Origin headers."""
+    origin = request.headers.get("origin")
+    if origin and ("localhost" in origin or "127.0.0.1" in origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 
 # -----------------------------------------------------------------------------
@@ -87,10 +170,11 @@ async def http_exception_handler(
         message=str(exc.detail),
         data=None,
     )
-    return JSONResponse(
+    response = JSONResponse(
         status_code=exc.status_code,
         content=response_body.model_dump(),
     )
+    return _attach_cors_headers(response, request)
 
 
 @app.exception_handler(RequestValidationError)
@@ -108,10 +192,11 @@ async def validation_exception_handler(
         message="Request payload validation failed",
         data=exc.errors(),
     )
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content=response_body.model_dump(),
     )
+    return _attach_cors_headers(response, request)
 
 
 @app.exception_handler(Exception)
@@ -127,13 +212,14 @@ async def unhandled_exception_handler(
     )
     response_body = StandardResponse[None](
         success=False,
-        message="An unexpected internal server error occurred.",
+        message=f"An unexpected internal server error occurred: {str(exc)}",
         data=None,
     )
-    return JSONResponse(
+    response = JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content=response_body.model_dump(),
     )
+    return _attach_cors_headers(response, request)
 
 
 # -----------------------------------------------------------------------------

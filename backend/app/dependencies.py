@@ -42,45 +42,37 @@ def get_graph_interface(
     """
     global _GRAPH_INTERFACE_INSTANCE
     if _GRAPH_INTERFACE_INSTANCE is None:
-        if _is_neo4j_reachable(settings.NEO4J_URI, timeout=1.0):
-            try:
-                logger.info(f"Connecting to Neo4j Graph DB at '{settings.NEO4J_URI}'")
-                neo4j_adapter = Neo4jGraphInterface(
-                    uri=settings.NEO4J_URI,
-                    auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD),
-                    database=settings.NEO4J_DATABASE,
-                )
-                neo4j_adapter.get_graph_statistics()
-                _GRAPH_INTERFACE_INSTANCE = neo4j_adapter
-                logger.info("Successfully connected to live Neo4j database instance.")
-            except Exception as err:
-                logger.warning(
-                    f"Unable to verify Neo4j host connection '{settings.NEO4J_URI}' ({err}). "
-                    "Initializing local in-memory MockGraphInterface fallback."
-                )
-                _GRAPH_INTERFACE_INSTANCE = MockGraphInterface()
-        else:
-            logger.info(
-                f"Neo4j host '{settings.NEO4J_URI}' is offline or port unreachable. "
-                "Using MockGraphInterface fallback."
+        try:
+            logger.info(f"Connecting to Neo4j Graph DB at '{settings.NEO4J_URI}'")
+            neo4j_adapter = Neo4jGraphInterface(
+                uri=settings.NEO4J_URI,
+                auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD),
+                database=settings.NEO4J_DATABASE,
+            )
+            neo4j_adapter.get_graph_statistics()
+            _GRAPH_INTERFACE_INSTANCE = neo4j_adapter
+            logger.info("Successfully connected to live Neo4j database instance.")
+        except Exception as err:
+            logger.warning(
+                f"Unable to connect to Neo4j host '{settings.NEO4J_URI}' ({err}). "
+                "Initializing local in-memory MockGraphInterface fallback."
             )
             _GRAPH_INTERFACE_INSTANCE = MockGraphInterface()
 
     return _GRAPH_INTERFACE_INSTANCE
 
 
-async def get_gemini_client(
+from app.core.llm_provider import BaseLLMProvider, get_llm_provider_instance
+
+
+def get_llm_provider(
     settings: Settings = Depends(get_settings),
-) -> Optional[Any]:
+) -> BaseLLMProvider:
     """
-    Dependency provider for Google Gemini AI Client.
+    Dependency provider for active LLM Provider (BaseLLMProvider).
     """
-    logger.debug("Resolving Gemini client dependency.")
-    client: Optional[Any] = None
-    try:
-        yield client
-    finally:
-        pass
+    logger.debug("Resolving LLM Provider dependency.")
+    return get_llm_provider_instance()
 
 
 async def get_qdrant_client(

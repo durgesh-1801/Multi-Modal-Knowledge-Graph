@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { NavigationTab } from './types';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Sidebar } from './components/Sidebar';
@@ -15,7 +16,19 @@ import { ReportsView } from './components/ReportsView';
 import { AuditLogsView } from './components/AuditLogsView';
 import { SettingsView } from './components/SettingsView';
 import { AccessDeniedView } from './components/AccessDeniedView';
+import { LoginView } from './components/LoginView';
 
+// ─── React Query client (shared across the app) ───────────────────────────────
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+
+// ─── Main Application (rendered after auth) ───────────────────────────────────
 const MainApp: React.FC = () => {
   const [activeTab, setActiveTab] = useState<NavigationTab>('dashboard');
   const { canAccessTab } = useAuth();
@@ -90,10 +103,34 @@ const MainApp: React.FC = () => {
   );
 };
 
+// ─── Auth Gate ────────────────────────────────────────────────────────────────
+const AuthGate: React.FC = () => {
+  const { user, isAuthLoading } = useAuth();
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-600/30 animate-pulse">
+            <span className="material-symbols-outlined text-white text-2xl fill">hub</span>
+          </div>
+          <p className="text-sm text-slate-500 font-medium">Loading Enterprise Platform…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginView />;
+  return <MainApp />;
+};
+
+// ─── Root App ─────────────────────────────────────────────────────────────────
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <AuthGate />
+      </AuthProvider>
+    </QueryClientProvider>
   );
 }

@@ -54,27 +54,28 @@ class RAGState(TypedDict, total=False):
     start_time: float
 
 
+from app.core.llm_provider import BaseLLMProvider, get_llm_provider_instance
+
+
 class GraphRAGWorkflow:
     """
     Modular LangGraph Workflow for executing state-based Graph RAG pipelines.
     """
 
-    def __init__(self, graph_db: Optional[AbstractGraphInterface] = None) -> None:
+    def __init__(
+        self,
+        graph_db: Optional[AbstractGraphInterface] = None,
+        llm_provider: Optional[BaseLLMProvider] = None,
+    ) -> None:
         self.retriever: Retriever = Retriever(graph_db=graph_db)
         self.context_builder: ContextBuilder = ContextBuilder()
         self.prompt_builder: PromptBuilder = PromptBuilder()
         self.citation_builder: CitationBuilder = CitationBuilder()
-        self.api_key: str = settings.GEMINI_API_KEY
+        self.llm_provider: BaseLLMProvider = llm_provider or get_llm_provider_instance()
 
     async def run_pipeline_async(self, rag_query: RAGQuery) -> RAGResponse:
         """
         Asynchronously executes the Graph RAG state machine nodes sequentially.
-
-        Args:
-            rag_query: Input RAGQuery model.
-
-        Returns:
-            RAGResponse: Final grounded answer, citations, context, and metrics.
         """
         start_t = time.time()
         logger.info(f"Starting Graph RAG Workflow for query: '{rag_query.query}'")
@@ -100,7 +101,7 @@ class GraphRAGWorkflow:
         # 4. Build Prompt Node
         state = self.node_build_prompt(state)
 
-        # 5. Generate Answer Node (Gemini)
+        # 5. Generate Answer Node (Provider-Agnostic LLM)
         state = await self.node_generate_answer(state)
 
         # 6. Generate Citations Node
@@ -138,13 +139,13 @@ class GraphRAGWorkflow:
         return state
 
     def node_build_prompt(self, state: RAGState) -> RAGState:
-        """Node 5: Assembles full Gemini RAG prompt."""
+        """Node 5: Assembles full LLM RAG prompt."""
         context_obj = state["context"]
         state["prompt_text"] = self.prompt_builder.build(state["query"], context_obj)
         return state
 
     async def node_generate_answer(self, state: RAGState) -> RAGState:
-        """Node 6: Generates grounded LLM answer using Gemini API."""
+        """Node 6: Generates grounded LLM answer via BaseLLMProvider."""
         prompt_text = state["prompt_text"]
         chunks = state.get("vector_chunks", [])
 
@@ -157,19 +158,18 @@ class GraphRAGWorkflow:
         answer = ""
         conf = 0.95
 
-        if self.api_key and self.api_key != "your-gemini-api-key-here":
-            try:
-                import google.generativeai as genai
+        try:
+            sys_instruct = "You are an enterprise compliance AI. Generate grounded, factual answers based strictly on the provided context."
+            llm_resp = await self.llm_provider.generate(
+                prompt=prompt_text,
+                system_prompt=sys_instruct,
+                temperature=0.1,
+            )
+            answer = llm_resp.text
+        except Exception as err:
+            logger.warning(f"LLM Provider answer generation error in RAG: {err}")
 
-                genai.configure(api_key=self.api_key)
-                model = genai.GenerativeModel("gemini-1.5-flash")
-                resp = model.generate_content(prompt_text)
-                answer = resp.text.strip() if resp and resp.text else ""
-            except Exception as err:
-                logger.warning(f"Generative AI SDK call failed in RAG ({err}). Attempting REST call.")
-                answer = await self._call_gemini_rest_api(prompt_text)
-
-        # Fallback for dev mode when Gemini API key is unconfigured
+        # Fallback for dev mode when API key is unconfigured or returns empty
         if not answer:
             logger.info("Generating grounded contextual answer fallback.")
             if chunks:
@@ -206,24 +206,3 @@ class GraphRAGWorkflow:
             processing_time_ms=round(elapsed_ms, 2),
         )
 
-    async def _call_gemini_rest_api(self, prompt: str) -> str:
-        """Calls Gemini v1beta REST API directly."""
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.2},
-        }
-        headers = {"Content-Type": "application/json"}
-        try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            return parts[0].get("text", "").strip()
-        except Exception as err:
-            logger.error(f"Gemini RAG REST call exception: {err}")
-        return ""

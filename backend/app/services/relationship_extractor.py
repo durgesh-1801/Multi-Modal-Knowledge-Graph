@@ -15,7 +15,8 @@ from app.core.logging import logger
 from app.schemas.entity import Entity
 from app.schemas.relationship import Relationship, RelationshipResponse
 from app.services.entity_extractor import EntityExtractor
-from app.services.gemini_relationships import GeminiRelationshipExtractor
+from app.services.entity_extractor import EntityExtractor
+from app.services.llm_relationships import LLMRelationshipExtractor
 from app.services.relationship_normalizer import RelationshipNormalizer
 from app.services.rule_relationships import RuleRelationshipExtractor
 
@@ -29,7 +30,7 @@ class RelationshipExtractor:
     def __init__(self) -> None:
         self.entity_extractor: EntityExtractor = EntityExtractor()
         self.rule_extractor: RuleRelationshipExtractor = RuleRelationshipExtractor()
-        self.gemini_extractor: GeminiRelationshipExtractor = GeminiRelationshipExtractor()
+        self.gemini_extractor: LLMRelationshipExtractor = LLMRelationshipExtractor()
         self.normalizer: RelationshipNormalizer = RelationshipNormalizer()
 
     async def extract_relationships_async(
@@ -71,14 +72,17 @@ class RelationshipExtractor:
             t0 = time.time()
             rule_rels = self.rule_extractor.extract(text, resolved_entities)
             raw_relationships.extend(rule_rels)
-            logger.info(f"Stage 1 (Rule-Based) finished in {(time.time() - t0)*1000:.1f}ms")
+            logger.info(f"Stage 1 (Rule-Based) finished in {(time.time() - t0)*1000:.1f}ms with {len(rule_rels)} edges.")
 
-        # Step 3: Gemini Semantic Relationship Extraction
-        if enable_gemini:
+        # Step 3: LLM Semantic Relationship Extraction (invoked if enabled or if rules produced zero edges)
+        if enable_gemini or len(raw_relationships) == 0:
             t0 = time.time()
-            gemini_rels = await self.gemini_extractor.extract_async(text, resolved_entities)
-            raw_relationships.extend(gemini_rels)
-            logger.info(f"Stage 2 (Gemini) finished in {(time.time() - t0)*1000:.1f}ms")
+            try:
+                gemini_rels = await self.gemini_extractor.extract_async(text, resolved_entities)
+                raw_relationships.extend(gemini_rels)
+                logger.info(f"Stage 2 (LLM) finished in {(time.time() - t0)*1000:.1f}ms with {len(gemini_rels)} edges.")
+            except Exception as err:
+                logger.warning(f"LLM relationship extraction fallback failed: {err}")
 
         # Step 4 & 5: Normalization & Deduplication
         t0 = time.time()

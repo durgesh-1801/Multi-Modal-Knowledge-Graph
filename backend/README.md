@@ -65,7 +65,9 @@ cp .env.example .env
 | `APP_NAME` | `Enterprise Compliance Knowledge Graph` | Application title |
 | `APP_VERSION` | `0.1.0` | Semantic versioning string |
 | `DEBUG` | `true` | Enables FastAPI debug mode |
-| `GEMINI_API_KEY` | *(None)* | Secret API key for Google Gemini AI integration |
+| `GROQ_API_KEY` | *(None)* | Secret API key for Groq AI integration |
+| `LLM_PROVIDER` | `groq` | Active LLM Provider engine adapter |
+| `LLM_MODEL` | `llama-3.3-70b-versatile` | Target Groq model identifier |
 | `QDRANT_URL` | `http://localhost:6333` | Host URL for Qdrant Vector Store |
 | `QDRANT_API_KEY` | *(None)* | Optional cloud API key for Qdrant |
 | `NEO4J_URI` | `bolt://localhost:7687` | Connection URI for Neo4j Knowledge Graph |

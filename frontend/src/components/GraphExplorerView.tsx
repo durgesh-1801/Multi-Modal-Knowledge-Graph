@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { GraphNode } from '../types';
+import { useGraphOverview } from '../hooks/useGraph';
+import { useSendMessage } from '../hooks/useChat';
 
 export const GraphExplorerView: React.FC = () => {
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -7,102 +9,100 @@ export const GraphExplorerView: React.FC = () => {
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiResult, setAiResult] = useState<string | null>(null);
 
-  // Initial Graph Nodes matching mockup
-  const initialNodes: GraphNode[] = [
-    {
-      id: 'node-finance',
-      label: 'Finance Ops',
-      type: 'Department',
-      x: 340,
-      y: 260,
-      properties: {
-        owner: 'Finance Dept.',
-        lastReviewed: 'Nov 04, 2023',
-        sensitivity: 'High',
-        dataLocality: 'US-East-1',
-      },
-      relationships: [
-        { type: 'IMPLEMENTS', targetId: 'node-aml', targetLabel: 'AML Compliance' },
-        { type: 'EXPOSED TO', targetId: 'node-breach', targetLabel: 'Data Breach' },
-      ],
-      sourceDocs: [{ name: 'finance_policy_2024.pdf', size: '2.8 MB', updated: '1d ago' }],
-    },
-    {
-      id: 'node-aml',
-      label: 'AML Compliance',
-      type: 'Policy',
-      x: 650,
-      y: 380,
-      status: 'Compliant',
-      version: 'v2.4.0',
-      properties: {
-        owner: 'Compliance Dept.',
-        lastReviewed: 'Oct 12, 2023',
-        sensitivity: 'High',
-        dataLocality: 'Global',
-      },
-      relationships: [
-        { type: 'IMPLEMENTED BY', targetId: 'node-finance', targetLabel: 'Finance Ops' },
-        { type: 'GOVERNED BY', targetId: 'node-gdpr', targetLabel: 'GDPR Art. 12' },
-      ],
-      sourceDocs: [{ name: 'compliance_v2_final.pdf', size: '4.2 MB', updated: '3d ago' }],
-    },
-    {
-      id: 'node-gdpr',
-      label: 'GDPR Art. 12',
-      type: 'Regulation',
-      x: 400,
-      y: 100,
-      properties: {
-        owner: 'Legal Affairs',
-        lastReviewed: 'Jan 15, 2024',
-        sensitivity: 'Critical',
-        dataLocality: 'EU-West-1',
-      },
-      relationships: [
-        { type: 'GOVERNS', targetId: 'node-aml', targetLabel: 'AML Compliance' },
-      ],
-      sourceDocs: [{ name: 'eu_gdpr_article12_guideline.pdf', size: '1.4 MB', updated: '5d ago' }],
-    },
-    {
-      id: 'node-breach',
-      label: 'Data Breach',
-      type: 'Risk',
-      x: 450,
-      y: 580,
-      status: 'Breach',
-      properties: {
-        owner: 'InfoSec Audit',
-        lastReviewed: 'Yesterday',
-        sensitivity: 'Critical',
-        dataLocality: 'Shared_Drive_A',
-      },
-      relationships: [
-        { type: 'AFFECTS', targetId: 'node-finance', targetLabel: 'Finance Ops' },
-        { type: 'AUDITED BY', targetId: 'node-audit', targetLabel: 'Q3 Review' },
-      ],
-      sourceDocs: [{ name: 'data_leak_investigation.pdf', size: '5.1 MB', updated: '4h ago' }],
-    },
-    {
-      id: 'node-audit',
-      label: 'Q3 Review',
-      type: 'Audit',
-      x: 720,
-      y: 630,
-      properties: {
-        owner: 'Internal Audit',
-        lastReviewed: 'Sep 30, 2023',
-        sensitivity: 'Medium',
-        dataLocality: 'US-Central',
-      },
-      relationships: [
-        { type: 'MONITORS', targetId: 'node-breach', targetLabel: 'Data Breach' },
-      ],
-      sourceDocs: [{ name: 'q3_internal_audit_summary.docx', size: '890 KB', updated: '1w ago' }],
-    },
-  ];
+  // ── Real API data ───────────────────────────────────────────────────────────
+  const { data: graphData, isLoading: graphLoading } = useGraphOverview(100);
+  const { mutateAsync: sendMessage } = useSendMessage();
 
-  const [selectedNode, setSelectedNode] = useState<GraphNode>(initialNodes[1]); // Default selected: AML Compliance
+  // ── Map backend nodes to frontend GraphNode format ────────────────────────
+  const NODE_TYPES = ['Department', 'Policy', 'Regulation', 'Risk', 'Audit', 'Person', 'Data'] as const;
+  const CANVAS_W = 900;
+  const CANVAS_H = 700;
+
+  const initialNodes: GraphNode[] = useMemo(() => {
+    if (!graphData?.nodes?.length) {
+      // Fallback demo nodes if backend has no data yet
+      return [
+        {
+          id: 'node-finance', label: 'Finance Ops', type: 'Department', x: 340, y: 260,
+          properties: { owner: 'Finance Dept.', lastReviewed: 'Nov 04, 2023', sensitivity: 'High', dataLocality: 'US-East-1' },
+          relationships: [{ type: 'IMPLEMENTS', targetId: 'node-aml', targetLabel: 'AML Compliance' }],
+          sourceDocs: [{ name: 'finance_policy_2024.pdf', size: '2.8 MB', updated: '1d ago' }],
+        },
+        {
+          id: 'node-aml', label: 'AML Compliance', type: 'Policy', x: 650, y: 380, status: 'Compliant', version: 'v2.4.0',
+          properties: { owner: 'Compliance Dept.', lastReviewed: 'Oct 12, 2023', sensitivity: 'High', dataLocality: 'Global' },
+          relationships: [{ type: 'GOVERNED BY', targetId: 'node-gdpr', targetLabel: 'GDPR Art. 12' }],
+          sourceDocs: [{ name: 'compliance_v2_final.pdf', size: '4.2 MB', updated: '3d ago' }],
+        },
+        {
+          id: 'node-gdpr', label: 'GDPR Art. 12', type: 'Regulation', x: 400, y: 100,
+          properties: { owner: 'Legal Affairs', lastReviewed: 'Jan 15, 2024', sensitivity: 'Critical', dataLocality: 'EU-West-1' },
+          relationships: [{ type: 'GOVERNS', targetId: 'node-aml', targetLabel: 'AML Compliance' }],
+          sourceDocs: [{ name: 'eu_gdpr_article12_guideline.pdf', size: '1.4 MB', updated: '5d ago' }],
+        },
+        {
+          id: 'node-breach', label: 'Data Breach', type: 'Risk', x: 450, y: 580, status: 'Breach',
+          properties: { owner: 'InfoSec Audit', lastReviewed: 'Yesterday', sensitivity: 'Critical', dataLocality: 'Shared_Drive_A' },
+          relationships: [{ type: 'AUDITED BY', targetId: 'node-audit', targetLabel: 'Q3 Review' }],
+          sourceDocs: [{ name: 'data_leak_investigation.pdf', size: '5.1 MB', updated: '4h ago' }],
+        },
+        {
+          id: 'node-audit', label: 'Q3 Review', type: 'Audit', x: 720, y: 630,
+          properties: { owner: 'Internal Audit', lastReviewed: 'Sep 30, 2023', sensitivity: 'Medium', dataLocality: 'US-Central' },
+          relationships: [{ type: 'MONITORS', targetId: 'node-breach', targetLabel: 'Data Breach' }],
+          sourceDocs: [{ name: 'q3_internal_audit_summary.docx', size: '890 KB', updated: '1w ago' }],
+        },
+      ];
+    }
+
+    // Map backend nodes to GraphNode format with auto-layout
+    return graphData.nodes.map((backendNode, idx) => {
+      const angle = (idx / graphData.nodes.length) * 2 * Math.PI;
+      const radius = Math.min(CANVAS_W, CANVAS_H) * 0.3;
+      const cx = CANVAS_W / 2;
+      const cy = CANVAS_H / 2;
+      const x = Math.round(cx + radius * Math.cos(angle)) - 60;
+      const y = Math.round(cy + radius * Math.sin(angle)) - 30;
+
+      const nodeType = backendNode.type as GraphNode['type'] || 'Policy';
+      const validType = NODE_TYPES.includes(nodeType as typeof NODE_TYPES[number]) ? nodeType : 'Policy';
+
+      // Build relationships from edges
+      const outEdges = (graphData.edges || []).filter((e) => e.source === backendNode.id);
+      const relationships = outEdges.map((e) => ({
+        type: e.type,
+        targetId: e.target,
+        targetLabel: graphData.nodes.find((n) => n.id === e.target)?.name || e.target,
+      }));
+
+      return {
+        id: backendNode.id,
+        label: backendNode.name || backendNode.id,
+        type: validType as GraphNode['type'],
+        x,
+        y,
+        properties: {
+          owner: String(backendNode.properties?.owner || 'Unknown'),
+          lastReviewed: String(backendNode.properties?.last_reviewed || 'N/A'),
+          sensitivity: (backendNode.properties?.sensitivity as 'Low' | 'Medium' | 'High' | 'Critical') || 'Medium',
+          dataLocality: String(backendNode.properties?.data_locality || 'Global'),
+        },
+        relationships,
+        sourceDocs: [],
+      } as GraphNode;
+    });
+  }, [graphData]);
+
+
+  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+
+  const activeNode = selectedNode || initialNodes[0] || {
+    id: 'node-fallback',
+    label: 'No Node Selected',
+    type: 'Policy',
+    x: 0,
+    y: 0,
+  };
 
   const handleNodeClick = (node: GraphNode) => {
     setSelectedNode(node);
@@ -117,17 +117,14 @@ export const GraphExplorerView: React.FC = () => {
     setAiAnalyzing(true);
     setAiResult(null);
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: `Perform node-level compliance audit for ${selectedNode.label} (${selectedNode.type}). Sensitivity: ${selectedNode.properties?.sensitivity}. Status: ${selectedNode.status || 'Active'}.`,
-        }),
+      // Call real backend POST /api/v1/chat
+      const data = await sendMessage({
+        query: `Perform node-level compliance audit for ${activeNode.label} (${activeNode.type}). Sensitivity: ${activeNode.properties?.sensitivity}. Status: ${activeNode.status || 'Active'}.`,
+        top_k: 3,
       });
-      const data = await res.json();
-      setAiResult(data.text);
+      setAiResult(data.answer || 'No analysis result returned.');
     } catch (err) {
-      setAiResult('Analysis error: Could not connect to Gemini compliance engine.');
+      setAiResult('Analysis error: Could not connect to compliance engine. Please check backend is running.');
     } finally {
       setAiAnalyzing(false);
     }
@@ -224,7 +221,7 @@ export const GraphExplorerView: React.FC = () => {
           {/* Render Nodes */}
           {initialNodes.map((node) => {
             const style = getNodeColorClass(node.type);
-            const isSelected = selectedNode.id === node.id;
+            const isSelected = activeNode.id === node.id;
 
             return (
               <div
@@ -315,22 +312,22 @@ export const GraphExplorerView: React.FC = () => {
         <div className="p-6 border-b border-outline-variant/20 bg-surface-container/50">
           <div className="flex justify-between items-start mb-4">
             <div className="w-12 h-12 rounded-xl bg-tertiary/10 flex items-center justify-center text-tertiary border border-tertiary/20">
-              <span className="material-symbols-outlined text-2xl">{getNodeIcon(selectedNode.type)}</span>
+              <span className="material-symbols-outlined text-2xl">{getNodeIcon(activeNode.type)}</span>
             </div>
             <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-surface-container-highest text-outline">
-              ID: {selectedNode.id}
+              ID: {activeNode.id}
             </span>
           </div>
 
-          <h2 className="font-headline-md text-xl font-bold text-on-surface mb-2">{selectedNode.label}</h2>
+          <h2 className="font-headline-md text-xl font-bold text-on-surface mb-2">{activeNode.label}</h2>
 
           <div className="flex gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold border border-tertiary/20">
-              {selectedNode.status || 'Active'}
+              {activeNode.status || 'Active'}
             </span>
-            {selectedNode.version && (
+            {activeNode.version && (
               <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant text-[10px] font-bold border border-outline-variant/20 font-mono">
-                {selectedNode.version}
+                {activeNode.version}
               </span>
             )}
           </div>
@@ -345,27 +342,27 @@ export const GraphExplorerView: React.FC = () => {
             <div className="space-y-2.5 bg-surface-container-lowest/60 p-3.5 rounded-xl border border-outline-variant/20">
               <div className="flex justify-between text-xs">
                 <span className="text-on-surface-variant">Owner</span>
-                <span className="font-medium text-on-surface">{selectedNode.properties?.owner || 'Unassigned'}</span>
+                <span className="font-medium text-on-surface">{activeNode.properties?.owner || 'Unassigned'}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-on-surface-variant">Last Reviewed</span>
-                <span className="font-medium text-on-surface">{selectedNode.properties?.lastReviewed || 'N/A'}</span>
+                <span className="font-medium text-on-surface">{activeNode.properties?.lastReviewed || 'N/A'}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-on-surface-variant">Sensitivity</span>
                 <span
                   className={`font-bold ${
-                    selectedNode.properties?.sensitivity === 'Critical' || selectedNode.properties?.sensitivity === 'High'
+                    activeNode.properties?.sensitivity === 'Critical' || activeNode.properties?.sensitivity === 'High'
                       ? 'text-error'
                       : 'text-tertiary'
                   }`}
                 >
-                  {selectedNode.properties?.sensitivity || 'Normal'}
+                  {activeNode.properties?.sensitivity || 'Normal'}
                 </span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-on-surface-variant">Data Locality</span>
-                <span className="font-medium text-on-surface">{selectedNode.properties?.dataLocality || 'Global'}</span>
+                <span className="font-medium text-on-surface">{activeNode.properties?.dataLocality || 'Global'}</span>
               </div>
             </div>
           </section>
@@ -373,10 +370,10 @@ export const GraphExplorerView: React.FC = () => {
           {/* Relationships */}
           <section>
             <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">hub</span> Relationships ({selectedNode.relationships?.length || 0})
+              <span className="material-symbols-outlined text-sm">hub</span> Relationships ({activeNode.relationships?.length || 0})
             </h3>
             <div className="space-y-2">
-              {selectedNode.relationships?.map((rel, idx) => (
+              {activeNode.relationships?.map((rel, idx) => (
                 <div
                   key={idx}
                   onClick={() => {
@@ -405,7 +402,7 @@ export const GraphExplorerView: React.FC = () => {
             <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
               <span className="material-symbols-outlined text-sm">description</span> Source Documents
             </h3>
-            {selectedNode.sourceDocs?.map((doc, idx) => (
+            {activeNode.sourceDocs?.map((doc, idx) => (
               <div
                 key={idx}
                 className="p-3.5 rounded-xl border border-outline-variant/20 bg-surface-container-lowest flex items-start gap-3"
@@ -451,7 +448,7 @@ export const GraphExplorerView: React.FC = () => {
             <span className="material-symbols-outlined text-lg fill">
               {aiAnalyzing ? 'sync' : 'psychology'}
             </span>
-            {aiAnalyzing ? 'Analyzing Node with Gemini...' : 'AI Analysis'}
+            {aiAnalyzing ? 'Analyzing Node with Groq AI…' : 'AI Analysis'}
           </button>
         </div>
       </aside>

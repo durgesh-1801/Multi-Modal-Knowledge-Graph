@@ -28,24 +28,40 @@ class QdrantClientManager:
     def __init__(
         self, url: Optional[str] = None, api_key: Optional[str] = None
     ) -> None:
-        self.url: str = url or settings.QDRANT_URL
+        self.url: Optional[str] = url or settings.QDRANT_URL
         self.api_key: Optional[str] = api_key or settings.QDRANT_API_KEY
         self._client: Optional[QdrantClient] = None
 
     def connect(self) -> QdrantClient:
         """
-        Establishes connection to Qdrant server. Fallbacks to in-memory mode if remote host is unavailable.
+        Establishes connection to Qdrant Cloud or local server.
+        Only fallbacks to in-memory mode if BOTH QDRANT_URL and QDRANT_API_KEY are missing.
         """
         if self._client is None:
-            logger.info(f"Connecting to Qdrant Vector Store at '{self.url}'")
+            url = self.url or settings.QDRANT_URL
+            api_key = self.api_key or settings.QDRANT_API_KEY
+
+            if not url and not api_key:
+                logger.warning("Both QDRANT_URL and QDRANT_API_KEY are missing. Initializing local in-memory Qdrant Client.")
+                self._client = QdrantClient(":memory:")
+                logger.info("In-memory Qdrant client initialized successfully.")
+                return self._client
+
+            is_cloud = bool(url and ("cloud.qdrant.io" in url or (api_key and len(api_key) > 10)))
+            conn_label = "Qdrant Cloud" if is_cloud else "Qdrant Vector Store"
+            logger.info(f"Connecting to {conn_label} at '{url}'")
+
             try:
-                self._client = QdrantClient(url=self.url, api_key=self.api_key, timeout=5.0)
+                self._client = QdrantClient(url=url, api_key=api_key, timeout=10.0)
                 # Test connectivity
                 self._client.get_collections()
-                logger.info("Successfully connected to remote Qdrant Vector Store.")
+                if is_cloud:
+                    logger.info("Connected to Qdrant Cloud")
+                else:
+                    logger.info("Successfully connected to Qdrant Vector Store.")
             except Exception as err:
                 logger.warning(
-                    f"Unable to connect to Qdrant host '{self.url}' ({err}). Initializing local in-memory Qdrant Client."
+                    f"Unable to connect to {conn_label} at '{url}' ({err}). Initializing local in-memory Qdrant Client."
                 )
                 self._client = QdrantClient(":memory:")
                 logger.info("In-memory Qdrant client initialized successfully.")
@@ -224,13 +240,27 @@ class QdrantClientManager:
         search_filter = Filter(must=must_conditions) if must_conditions else None
 
         try:
-            results = client.search(
-                collection_name=collection_name,
-                query_vector=query_vector,
-                limit=top_k,
-                query_filter=search_filter,
-                score_threshold=score_threshold if score_threshold > 0 else None,
-            )
+            if hasattr(client, "query_points"):
+                res = client.query_points(
+                    collection_name=collection_name,
+                    query=query_vector,
+                    limit=top_k,
+                    query_filter=search_filter,
+                    score_threshold=score_threshold if (score_threshold and score_threshold > 0) else None,
+                )
+                results = res.points
+            elif hasattr(client, "search"):
+                results = client.search(
+                    collection_name=collection_name,
+                    query_vector=query_vector,
+                    limit=top_k,
+                    query_filter=search_filter,
+                    score_threshold=score_threshold if (score_threshold and score_threshold > 0) else None,
+                )
+            else:
+                logger.error("QdrantClient has neither 'query_points' nor 'search' method.")
+                return []
+
             logger.info(f"Qdrant vector search returned {len(results)} matches.")
             return results
         except Exception as err:

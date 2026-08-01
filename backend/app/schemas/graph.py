@@ -126,5 +126,5 @@ class EntityMergeRequest(BaseModel):
 
     canonical_name: str = Field(..., description="Target canonical entity node name")
     duplicate_names: List[str] = Field(
-        ..., min_items=1, description="List of duplicate entity node names to merge"
+        ..., min_length=1, description="List of duplicate entity node names to merge"
     )

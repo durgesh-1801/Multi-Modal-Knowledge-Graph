@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ProcessedDocument, NavigationTab } from '../types';
+import { useUploadPDF } from '../hooks/useUpload';
 
 interface UploadCenterViewProps {
   onNavigate: (tab: NavigationTab) => void;
@@ -7,7 +8,12 @@ interface UploadCenterViewProps {
 
 export const UploadCenterView: React.FC<UploadCenterViewProps> = ({ onNavigate }) => {
   const [dragOver, setDragOver] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const { mutateAsync: uploadPDF, isPending: analyzing } = useUploadPDF({
+    onProgress: (evt) => setUploadProgress(evt.percent),
+  });
 
   const [processedDocs, setProcessedDocs] = useState<ProcessedDocument[]>([
     {
@@ -47,39 +53,34 @@ export const UploadCenterView: React.FC<UploadCenterViewProps> = ({ onNavigate }
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const file = files[0];
+    setUploadError(null);
+    setUploadProgress(0);
 
-    setAnalyzing(true);
+    const fileArray = Array.from(files);
 
     try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          docName: file.name,
-          docType: file.type || 'pdf',
-        }),
-      });
+      const result = await uploadPDF(fileArray);
+      const results = Array.isArray(result) ? result : [result];
 
-      const data = await res.json();
-
-      const newDoc: ProcessedDocument = {
-        id: `d-${Date.now()}`,
-        uuid: `${Math.random().toString(16).substring(2, 6)}-${Math.random().toString(16).substring(2, 6)}`,
-        name: file.name,
-        type: file.name.endsWith('.mp3') ? 'audio' : file.name.endsWith('.docx') ? 'doc' : 'pdf',
+      const newDocs: ProcessedDocument[] = results.map((r) => ({
+        id: `d-${Date.now()}-${Math.random()}`,
+        uuid: r.saved_filename?.substring(0, 9) || `${Math.random().toString(16).substring(2, 6)}-${Math.random().toString(16).substring(2, 6)}`,
+        name: r.file_name,
+        type: r.file_name.endsWith('.mp3') || r.file_name.endsWith('.wav') ? 'audio' :
+              r.file_name.endsWith('.docx') || r.file_name.endsWith('.doc') ? 'doc' : 'pdf',
         confidence: 96,
-        extractedObjectsCount: 12,
-        entities: data.entities || ['ISO_27001', 'PII_Record', 'User_Auth'],
+        extractedObjectsCount: Array.isArray(r.tables) ? r.tables.length + (Array.isArray(r.pages) ? r.pages.length : 0) : 12,
+        entities: r.metadata?.title ? [r.metadata.title] : ['ISO_27001', 'PII_Record'],
         uploadDate: 'Just now',
         status: 'Compliant',
-      };
+      }));
 
-      setProcessedDocs((prev) => [newDoc, ...prev]);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setAnalyzing(false);
+      setProcessedDocs((prev) => [...newDocs, ...prev]);
+      setUploadProgress(100);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Upload failed';
+      setUploadError(msg);
+      setUploadProgress(0);
     }
   };
 
@@ -155,11 +156,40 @@ export const UploadCenterView: React.FC<UploadCenterViewProps> = ({ onNavigate }
 
               <input
                 type="file"
+                multiple
+                accept=".pdf,.docx,.doc,.mp3,.wav,.png,.jpg,.jpeg"
                 className="absolute inset-0 opacity-0 cursor-pointer"
                 onChange={(e) => handleFileUpload(e.target.files)}
               />
             </div>
           </div>
+
+          {/* Upload Progress Bar */}
+          {analyzing && (
+            <div className="glass-card rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-on-surface">Uploading & Processing…</span>
+                <span className="text-xs font-mono text-primary font-bold">{uploadProgress}%</span>
+              </div>
+              <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-primary transition-all duration-300 rounded-full"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-on-surface-variant mt-1.5">Backend is running OCR → Entity Extraction → Graph Building…</p>
+            </div>
+          )}
+
+          {/* Upload Error */}
+          {uploadError && !analyzing && (
+            <div className="glass-card rounded-2xl p-4 border border-error/30 bg-error/5">
+              <div className="flex items-center gap-2 text-error text-xs font-bold">
+                <span className="material-symbols-outlined text-base">error_outline</span>
+                Upload Failed: {uploadError}
+              </div>
+            </div>
+          )}
 
           {/* Animated Processing Pipeline Status */}
           <div className="glass-card rounded-2xl p-6">

@@ -14,6 +14,21 @@ from app.core.logging import logger
 from app.schemas.embeddings import Chunk, EmbeddingResponse
 
 
+_EMBEDDING_SERVICE_SINGLETON: Optional["EmbeddingService"] = None
+
+
+def get_embedding_service(model_name: Optional[str] = None) -> "EmbeddingService":
+    """
+    Returns a cached global singleton instance of EmbeddingService.
+    Ensures SentenceTransformer model is initialized ONCE at startup.
+    """
+    global _EMBEDDING_SERVICE_SINGLETON
+    if _EMBEDDING_SERVICE_SINGLETON is None:
+        _EMBEDDING_SERVICE_SINGLETON = EmbeddingService(model_name=model_name)
+        _EMBEDDING_SERVICE_SINGLETON.load_model()
+    return _EMBEDDING_SERVICE_SINGLETON
+
+
 class EmbeddingService:
     """
     Modular Embedding Service supporting auto-dimension discovery, batch vector generation,
@@ -23,7 +38,7 @@ class EmbeddingService:
     def __init__(self, model_name: Optional[str] = None) -> None:
         self.model_name: str = model_name or settings.EMBEDDING_MODEL
         self._model = None
-        self._vector_dim: int = 1024
+        self._vector_dim: int = 384
 
     def load_model(self, model_name: Optional[str] = None) -> Any:
         """
@@ -44,7 +59,10 @@ class EmbeddingService:
 
                 self._model = SentenceTransformer(target_model)
                 self.model_name = target_model
-                self._vector_dim = self._model.get_sentence_embedding_dimension()
+                if hasattr(self._model, "get_embedding_dimension"):
+                    self._vector_dim = self._model.get_embedding_dimension()
+                else:
+                    self._vector_dim = self._model.get_sentence_embedding_dimension()
                 logger.info(
                     f"Successfully loaded embedding model '{target_model}' (Dimension: {self._vector_dim})"
                 )
@@ -54,7 +72,7 @@ class EmbeddingService:
                 )
                 self._model = "FALLBACK"
                 self.model_name = target_model
-                self._vector_dim = 1024
+                self._vector_dim = 384
 
         return self._model
 

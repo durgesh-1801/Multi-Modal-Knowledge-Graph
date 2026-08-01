@@ -1,11 +1,13 @@
 import React from 'react';
 import { NavigationTab } from '../types';
+import { useGraphStats } from '../hooks/useGraph';
 
 interface AnalyticsViewProps {
   onNavigate: (tab: NavigationTab) => void;
 }
 
 export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onNavigate }) => {
+  const { data: stats, isLoading } = useGraphStats();
   return (
     <div className="space-y-8 animate-in fade-in duration-300 max-w-7xl mx-auto">
       {/* Header */}
@@ -32,8 +34,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onNavigate }) => {
             <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Overall Health</span>
             <span className="material-symbols-outlined text-tertiary">verified_user</span>
           </div>
-          <div className="text-3xl font-extrabold text-tertiary mb-1">98.4%</div>
-          <p className="text-xs text-on-surface-variant">Passed 1,420 automated compliance rules.</p>
+          <div className="text-3xl font-extrabold text-tertiary mb-1">
+            {isLoading ? '—' : `${((1 - Number(stats?.graph_density ?? 0.016)) * 100).toFixed(1)}%`}
+          </div>
+          <p className="text-xs text-on-surface-variant">
+            {isLoading ? '—' : `${(stats?.total_nodes ?? 0).toLocaleString()} total graph entities.`}
+          </p>
         </div>
 
         <div className="glass-card p-6 rounded-2xl border-primary/20">
@@ -41,8 +47,12 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ onNavigate }) => {
             <span className="text-xs font-bold uppercase tracking-widest text-on-surface-variant">Graph Density</span>
             <span className="material-symbols-outlined text-primary">hub</span>
           </div>
-          <div className="text-3xl font-extrabold text-primary mb-1">3.42 Edges/Node</div>
-          <p className="text-xs text-on-surface-variant">+14.2% relationship growth this month.</p>
+          <div className="text-3xl font-extrabold text-primary mb-1">
+            {isLoading ? '—' : `${(stats?.avg_degree ?? 0).toFixed(2)} Edges/Node`}
+          </div>
+          <p className="text-xs text-on-surface-variant">
+            {isLoading ? '—' : `${(stats?.total_edges ?? 0).toLocaleString()} total graph relationships.`}
+          </p>
         </div>
 
         <div className="glass-card p-6 rounded-2xl border-error/20">

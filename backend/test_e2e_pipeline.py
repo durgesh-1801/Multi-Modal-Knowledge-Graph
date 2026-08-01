@@ -6,11 +6,11 @@ Tests complete multi-stage pipeline:
 2. Table Parsing (Camelot)
 3. Dual-Engine OCR (PaddleOCR + Tesseract)
 4. Audio Preprocessing & Transcription (Whisper)
-5. Structured Entity Extraction (spaCy + Rules + Gemini)
+5. Structured Entity Extraction (spaCy + Rules + Groq LLM)
 6. Relationship Extraction & Graph Building (Neo4j / Mock Graph)
 7. Text Chunking & Dense Embedding Generation (SentenceTransformers)
 8. Vector DB Storage & Payload Search (Qdrant)
-9. Graph RAG Engine Execution (LangGraph + Grounded Gemini LLM)
+9. Graph RAG Engine Execution (LangGraph + Grounded Groq LLM)
 10. Multi-Turn Conversational AI Chat (Chat Orchestrator)
 """
 

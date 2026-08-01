@@ -1,8 +1,9 @@
+// ─── RBAC Roles & Status ────────────────────────────────────────────────────
 export type Role = 'ADMIN' | 'COMPLIANCE_OFFICER' | 'AUDITOR';
 
 export type UserStatus = 'ACTIVE' | 'INACTIVE' | 'SUSPENDED';
 
-export type NavigationTab = 
+export type NavigationTab =
   | 'dashboard'
   | 'projects'
   | 'users'
@@ -17,8 +18,9 @@ export type NavigationTab =
   | 'logs'
   | '403';
 
+// ─── User ────────────────────────────────────────────────────────────────────
 export interface User {
-  id: str;
+  id: string;          // fixed: was `str` (typo)
   email: string;
   name: string;
   role: Role;
@@ -65,6 +67,7 @@ export interface SystemSettingsData {
   security_audit_mode: boolean;
 }
 
+// ─── Dashboard KPI ───────────────────────────────────────────────────────────
 export interface KPIMetric {
   id: string;
   title: string;
@@ -83,6 +86,7 @@ export interface InsightItem {
   severity?: 'critical' | 'warning' | 'info' | 'success';
 }
 
+// ─── Graph Types ─────────────────────────────────────────────────────────────
 export interface GraphNode {
   id: string;
   label: string;
@@ -109,6 +113,39 @@ export interface GraphNode {
   }>;
 }
 
+/** Matches backend GraphStatistics schema */
+export interface GraphStatistics {
+  total_nodes: number;
+  total_edges: number;
+  node_type_distribution: Record<string, number>;
+  avg_degree: number;
+  graph_density: number;
+  most_connected_entities: Array<{ name: string; degree: number }>;
+  total_documents?: number;
+}
+
+/** Matches backend SubgraphResponse schema */
+export interface BackendGraphNode {
+  id: string;
+  name: string;
+  type: string;
+  properties?: Record<string, unknown>;
+}
+
+export interface BackendGraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  properties?: Record<string, unknown>;
+}
+
+export interface SubgraphResponse {
+  nodes: BackendGraphNode[];
+  edges: BackendGraphEdge[];
+  metadata?: Record<string, unknown>;
+}
+
+// ─── Documents ───────────────────────────────────────────────────────────────
 export interface ProcessedDocument {
   id: string;
   uuid: string;
@@ -122,6 +159,7 @@ export interface ProcessedDocument {
   riskScore?: string;
 }
 
+// ─── Chat ────────────────────────────────────────────────────────────────────
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'ai';
@@ -132,6 +170,7 @@ export interface ChatMessage {
   nodes?: string[];
   citations?: string[];
   isStreaming?: boolean;
+  processingTime?: number;
 }
 
 export interface ChatSession {
@@ -140,4 +179,22 @@ export interface ChatSession {
   preview: string;
   timestamp: string;
   active?: boolean;
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  user: User;
+}
+
+export interface UserProfileResponse {
+  user: User;
+  permissions: string[];
 }

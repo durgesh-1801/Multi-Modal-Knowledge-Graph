@@ -72,12 +72,12 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ onNavigate }) => {
     },
   ];
 
-  const filteredDocs = documents.filter((doc) => {
+  const filteredDocs = (documents || []).filter((doc) => {
     const matchesFilter = filterStatus === 'All' || doc.status === filterStatus;
     const matchesSearch =
-      doc.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.framework.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      doc.entities.some((e) => e.toLowerCase().includes(searchQuery.toLowerCase()));
+      (doc.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.framework || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.entities || []).some((e) => (e || '').toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesFilter && matchesSearch;
   });
 
@@ -180,7 +180,7 @@ export const DocumentsView: React.FC<DocumentsViewProps> = ({ onNavigate }) => {
                   <td className="p-4 font-mono text-tertiary font-bold">{doc.confidence}%</td>
                   <td className="p-4">
                     <div className="flex flex-wrap gap-1 max-w-xs">
-                      {doc.entities.map((ent, idx) => (
+                      {(doc.entities || []).map((ent, idx) => (
                         <span
                           key={idx}
                           className="px-2 py-0.5 bg-surface-container-highest text-on-surface-variant text-[10px] rounded border border-outline-variant/30 font-mono"

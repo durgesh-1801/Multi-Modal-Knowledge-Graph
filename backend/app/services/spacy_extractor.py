@@ -40,12 +40,25 @@ class SpacyExtractor:
                     self._nlp = spacy.load("en_core_web_sm")
                     logger.info("Successfully loaded spaCy 'en_core_web_sm' model.")
                 except OSError:
-                    logger.warning(
-                        "spaCy 'en_core_web_sm' model not found. Attempting fallback blank English model."
-                    )
-                    self._nlp = spacy.blank("en")
+                    logger.info("spaCy 'en_core_web_sm' model not found. Automatically downloading model...")
+                    try:
+                        import spacy.cli
+                        spacy.cli.download("en_core_web_sm")
+                        self._nlp = spacy.load("en_core_web_sm")
+                        logger.info("Successfully downloaded and loaded spaCy 'en_core_web_sm' model.")
+                    except Exception as download_err:
+                        import sys
+                        import subprocess
+                        logger.warning(f"spacy.cli download failed ({download_err}). Attempting subprocess download...")
+                        subprocess.run(
+                            [sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
+                            check=True,
+                            capture_output=True,
+                        )
+                        self._nlp = spacy.load("en_core_web_sm")
+                        logger.info("Successfully installed and loaded spaCy 'en_core_web_sm' model.")
             except Exception as err:
-                logger.warning(f"Failed to initialize spaCy NLP engine: {err}")
+                logger.error(f"Failed to initialize spaCy NLP engine: {err}")
                 self._nlp = "FALLBACK"
         return self._nlp
 

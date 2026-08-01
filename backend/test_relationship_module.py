@@ -4,7 +4,7 @@ Automated Verification Script for Relationship Extraction Module.
 Validates:
 1. RuleRelationshipExtractor (Pattern matching & verbal clause parsing)
 2. RelationshipNormalizer (Relation type standardization, edge deduplication, graph payload assembly)
-3. Gemini Relationship Extractor (Fallback handling)
+3. LLM Relationship Extractor (Fallback handling)
 4. Full RelationshipExtractor Master Pipeline
 5. API Endpoint: POST /api/v1/extract/relationships (single & batch)
 """

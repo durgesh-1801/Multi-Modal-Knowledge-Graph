@@ -14,7 +14,7 @@ from typing import List
 from app.core.logging import logger
 from app.schemas.entity import Entity, EntityResponse
 from app.services.entity_normalizer import EntityNormalizer
-from app.services.gemini_extractor import GeminiExtractor
+from app.services.llm_extractor import LLMEntityExtractor
 from app.services.spacy_extractor import SpacyExtractor
 
 
@@ -26,7 +26,7 @@ class EntityExtractor:
     def __init__(self) -> None:
         self.spacy_extractor: SpacyExtractor = SpacyExtractor()
         self.rule_normalizer: EntityNormalizer = EntityNormalizer()
-        self.gemini_extractor: GeminiExtractor = GeminiExtractor()
+        self.gemini_extractor: LLMEntityExtractor = LLMEntityExtractor()
 
     async def extract_entities_async(
         self,

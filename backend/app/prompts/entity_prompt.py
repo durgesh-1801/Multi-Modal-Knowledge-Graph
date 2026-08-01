@@ -1,7 +1,7 @@
 """
-Gemini Entity Extraction Prompt Templates.
+LLM Entity Extraction Prompt Templates.
 
-Defines prompt templates instructing Gemini to extract enterprise compliance entities
+Defines prompt templates instructing LLM Provider to extract enterprise compliance entities
 (Regulations, Controls, Risks, Policies, Audit Findings, Security Requirements)
 and return strictly structured JSON payloads.
 """
@@ -64,6 +64,6 @@ def build_entity_prompt(text: str) -> str:
         text: Raw document text to analyze.
 
     Returns:
-        str: Fully formatted prompt string for Gemini API.
+        str: Fully formatted prompt string for LLM API.
     """
     return f"{ENTITY_EXTRACTION_SYSTEM_PROMPT}\n\"\"\"\n{text}\n\"\"\""

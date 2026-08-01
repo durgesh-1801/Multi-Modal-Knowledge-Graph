@@ -1,112 +1,98 @@
 import React, { useState } from 'react';
 import { Role, User, UserStatus } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useUsers, useCreateUser, useUpdateUserRole, useUpdateUserStatus, useDeleteUser } from '../hooks/useUsers';
+import { Toast, useToast } from './Toast';
+import { getErrorMessage } from '../lib/api';
 
 export const UsersView: React.FC = () => {
   const { user: currentUser } = useAuth();
+  const { toast, showToast, dismissToast } = useToast();
 
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: 'usr_admin_001',
-      email: 'admin@enterprise.com',
-      name: 'Sarah Jenkins',
-      role: 'ADMIN',
-      status: 'ACTIVE',
-      created_at: '2026-01-15T08:30:00Z',
-      updated_at: '2026-07-20T14:20:00Z',
-    },
-    {
-      id: 'usr_officer_002',
-      email: 'officer@enterprise.com',
-      name: 'David Ross',
-      role: 'COMPLIANCE_OFFICER',
-      status: 'ACTIVE',
-      created_at: '2026-02-10T10:15:00Z',
-      updated_at: '2026-07-28T09:10:00Z',
-    },
-    {
-      id: 'usr_auditor_003',
-      email: 'auditor@enterprise.com',
-      name: 'Elena Rostova',
-      role: 'AUDITOR',
-      status: 'ACTIVE',
-      created_at: '2026-03-01T11:00:00Z',
-      updated_at: '2026-07-15T16:45:00Z',
-    },
-    {
-      id: 'usr_analyst_004',
-      email: 'michael.c@enterprise.com',
-      name: 'Michael Chen',
-      role: 'COMPLIANCE_OFFICER',
-      status: 'SUSPENDED',
-      created_at: '2026-04-12T14:30:00Z',
-      updated_at: '2026-07-02T12:00:00Z',
-    },
-  ]);
+  // ── Real API data ───────────────────────────────────────────────────────────
+  const { data: users = [], isLoading, error, refetch } = useUsers();
+  const { mutateAsync: createUser, isPending: isCreating } = useCreateUser();
+  const { mutateAsync: updateRole } = useUpdateUserRole();
+  const { mutateAsync: updateStatus } = useUpdateUserStatus();
+  const { mutateAsync: deleteUser } = useDeleteUser();
 
+  // ── Invite modal state ──────────────────────────────────────────────────────
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<Role>('COMPLIANCE_OFFICER');
 
-  const handleInviteUser = (e: React.FormEvent) => {
+  const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmail || !newName) return;
-
-    const newUser: User = {
-      id: `usr_${Math.random().toString(36).substring(2, 9)}`,
-      email: newEmail,
-      name: newName,
-      role: newRole,
-      status: 'ACTIVE',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setUsers([newUser, ...users]);
-    setNewEmail('');
-    setNewName('');
-    setNewRole('COMPLIANCE_OFFICER');
-    setShowInviteModal(false);
+    if (!newEmail || !newName || !newPassword) return;
+    try {
+      await createUser({ email: newEmail, name: newName, role: newRole, password: newPassword });
+      showToast(`User ${newEmail} created successfully.`, 'success');
+      setNewEmail('');
+      setNewName('');
+      setNewPassword('');
+      setNewRole('COMPLIANCE_OFFICER');
+      setShowInviteModal(false);
+    } catch (err) {
+      showToast(getErrorMessage(err), 'error');
+    }
   };
 
-  const handleRoleChange = (userId: string, targetRole: Role) => {
-    setUsers(
-      users.map((u) => (u.id === userId ? { ...u, role: targetRole, updated_at: new Date().toISOString() } : u))
-    );
+  const handleRoleChange = async (userId: string, targetRole: Role) => {
+    // Prevent changing own role
+    if (userId === currentUser?.id) {
+      showToast('You cannot change your own role.', 'warning');
+      return;
+    }
+    try {
+      await updateRole({ userId, role: targetRole });
+      showToast('Role updated successfully.', 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err), 'error');
+    }
   };
 
-  const handleStatusToggle = (userId: string) => {
-    setUsers(
-      users.map((u) => {
-        if (u.id === userId) {
-          const nextStatus: UserStatus = u.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-          return { ...u, status: nextStatus, updated_at: new Date().toISOString() };
-        }
-        return u;
-      })
-    );
+  const handleStatusToggle = async (userId: string, currentStatus: UserStatus) => {
+    if (userId === currentUser?.id) {
+      showToast('You cannot change your own account status.', 'warning');
+      return;
+    }
+    const nextStatus: UserStatus = currentStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    try {
+      await updateStatus({ userId, status: nextStatus });
+      showToast(`User status updated to ${nextStatus}.`, 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err), 'error');
+    }
   };
 
-  const handleDeleteUser = (userId: string) => {
-    if (confirm('Are you sure you want to remove this user account?')) {
-      setUsers(users.filter((u) => u.id !== userId));
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (userId === currentUser?.id) {
+      showToast('You cannot delete your own account.', 'warning');
+      return;
+    }
+    if (!confirm(`Are you sure you want to remove ${userName}?`)) return;
+    try {
+      await deleteUser(userId);
+      showToast(`User ${userName} deleted.`, 'success');
+    } catch (err) {
+      showToast(getErrorMessage(err), 'error');
     }
   };
 
   const getRoleBadge = (role: Role) => {
     switch (role) {
-      case 'ADMIN':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
-      case 'COMPLIANCE_OFFICER':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'AUDITOR':
-        return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'ADMIN': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'COMPLIANCE_OFFICER': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'AUDITOR': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in">
+      {toast && <Toast message={toast.message} type={toast.type} onDismiss={dismissToast} />}
+
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
         <div>
@@ -135,76 +121,103 @@ export const UsersView: React.FC = () => {
           <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
             All Registered Directory Users ({users.length})
           </span>
-          <span className="text-[11px] text-slate-400 font-medium">Strict RBAC Enforced</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-slate-400 font-medium">Strict RBAC Enforced</span>
+            <button onClick={() => refetch()} className="p-1 hover:bg-slate-100 rounded-lg cursor-pointer" title="Refresh">
+              <span className="material-symbols-outlined text-sm text-slate-400">refresh</span>
+            </button>
+          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold text-[10px]">
-              <tr>
-                <th className="px-6 py-3.5">User</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Account Status</th>
-                <th className="px-6 py-3.5">Created At</th>
-                <th className="px-6 py-3.5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {users.map((u) => (
-                <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700">
-                      {u.name.split(' ').map((n) => n[0]).join('')}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-900">{u.name}</p>
-                      <p className="text-[11px] text-slate-500">{u.email}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <select
-                      value={u.role}
-                      onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
-                      className={`text-xs font-bold px-2.5 py-1 rounded-lg border bg-white focus:outline-none cursor-pointer ${getRoleBadge(
-                        u.role
-                      )}`}
-                    >
-                      <option value="ADMIN">ADMIN</option>
-                      <option value="COMPLIANCE_OFFICER">COMPLIANCE OFFICER</option>
-                      <option value="AUDITOR">AUDITOR</option>
-                    </select>
-                  </td>
-                  <td className="px-6 py-4">
-                    <button
-                      onClick={() => handleStatusToggle(u.id)}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${
-                        u.status === 'ACTIVE'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                          : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-                      }`}
-                    >
-                      {u.status}
-                    </button>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 font-mono text-[11px]">
-                    {new Date(u.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
-                        title="Delete User Account"
-                      >
-                        <span className="material-symbols-outlined text-base">delete</span>
-                      </button>
-                    </div>
-                  </td>
+        {/* Loading Skeleton */}
+        {isLoading && (
+          <div className="p-6 space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="h-14 bg-slate-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="p-8 text-center">
+            <span className="material-symbols-outlined text-3xl text-red-400 mb-2 block">error_outline</span>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Failed to load users</p>
+            <p className="text-xs text-slate-500 mb-4">Check that the backend is running.</p>
+            <button onClick={() => refetch()} className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl cursor-pointer">
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Table */}
+        {!isLoading && !error && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold text-[10px]">
+                <tr>
+                  <th className="px-6 py-3.5">User</th>
+                  <th className="px-6 py-3.5">Role</th>
+                  <th className="px-6 py-3.5">Account Status</th>
+                  <th className="px-6 py-3.5">Created At</th>
+                  <th className="px-6 py-3.5 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {(users || []).map((u) => (
+                  <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4 flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-slate-700">
+                        {(u.name || u.email || 'U').split(' ').map((n) => n[0]).join('').substring(0, 2)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900">{u.name || 'User'}</p>
+                        <p className="text-[11px] text-slate-500">{u.email}</p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <select
+                        value={u.role}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value as Role)}
+                        className={`text-xs font-bold px-2.5 py-1 rounded-lg border bg-white focus:outline-none cursor-pointer ${getRoleBadge(u.role as Role)}`}
+                      >
+                        <option value="ADMIN">ADMIN</option>
+                        <option value="COMPLIANCE_OFFICER">COMPLIANCE OFFICER</option>
+                        <option value="AUDITOR">AUDITOR</option>
+                      </select>
+                    </td>
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => handleStatusToggle(u.id, u.status as UserStatus)}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border cursor-pointer ${
+                          u.status === 'ACTIVE'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                        }`}
+                      >
+                        {u.status}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 font-mono text-[11px]">
+                      {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleDeleteUser(u.id, u.name)}
+                          className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
+                          title="Delete User Account"
+                        >
+                          <span className="material-symbols-outlined text-base">delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Invite User Modal */}
@@ -244,6 +257,19 @@ export const UsersView: React.FC = () => {
               </div>
 
               <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Initial Password</label>
+                <input
+                  type="password"
+                  required
+                  minLength={6}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 6 characters"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-600 focus:bg-white"
+                />
+              </div>
+
+              <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Assign Role</label>
                 <select
                   value={newRole}
@@ -260,15 +286,16 @@ export const UsersView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowInviteModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs"
+                  disabled={isCreating}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-xl shadow-xs disabled:opacity-60 cursor-pointer"
                 >
-                  Send Invitation
+                  {isCreating ? 'Creating…' : 'Send Invitation'}
                 </button>
               </div>
             </form>

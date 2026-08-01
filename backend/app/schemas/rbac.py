@@ -109,7 +109,7 @@ class UserProfileResponse(BaseModel):
 # System Settings Schemas
 # -----------------------------------------------------------------------------
 class SystemSettings(BaseModel):
-    llm_provider: str = Field(default="Google Gemini Pro", description="Active LLM engine.")
+    llm_provider: str = Field(default="Groq Llama-3.3 70B Versatile", description="Active LLM engine.")
     neo4j_uri: str = Field(default="bolt://localhost:7687", description="Neo4j connection URI.")
     qdrant_url: str = Field(default="http://localhost:6333", description="Qdrant service URL.")
     embedding_model: str = Field(default="text-embedding-004", description="Embedding model name.")

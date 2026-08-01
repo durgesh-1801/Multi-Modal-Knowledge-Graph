@@ -11,6 +11,7 @@ Provides an OpenCV-based pipeline for enhancing image quality prior to OCR text 
 """
 
 import io
+import numpy as np
 from typing import Union
 try:
     import cv2

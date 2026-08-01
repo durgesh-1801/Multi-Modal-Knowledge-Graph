@@ -8,6 +8,7 @@ and AUTOMATIC Knowledge Graph construction (Text Extraction -> Chunking & Vector
 
 from typing import Any, List, Union
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
 
 from app.core.logging import logger
 from app.dependencies import get_graph_interface
@@ -55,16 +56,20 @@ async def upload_pdf(
     ),
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
     current_user: UserResponse = Depends(require_permission(Permission.UPLOAD_DOCUMENT)),
-) -> StandardResponse[Union[PDFProcessedData, List[PDFProcessedData]]]:
+) -> Any:
     """
     Handles PDF document upload, disk persistence, text/table parsing, Qdrant vector storage,
     entity/relationship extraction, and automatic Neo4j Knowledge Graph construction.
     """
     if not files or len(files) == 0:
         logger.warning("Upload request received with no files attached.")
-        raise HTTPException(
+        return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No files provided in upload request.",
+            content=StandardResponse[None](
+                success=False,
+                message="No files provided in upload request.",
+                data=None,
+            ).model_dump(),
         )
 
     graph_builder = GraphBuilderService(graph_db=graph_db)
@@ -73,15 +78,27 @@ async def upload_pdf(
     for file in files:
         original_filename = file.filename or "uploaded_document.pdf"
         logger.info(f"Processing upload request for file: '{original_filename}'")
-
-        # 1. Validate PDF file
-        binary_content = await file_manager.validate_pdf(file)
-
-        # 2. Generate unique storage filename and persist to disk
-        unique_filename = file_manager.generate_unique_filename(original_filename)
-        saved_path = file_manager.save_file(binary_content, unique_filename)
+        saved_path = None
 
         try:
+            # 1. Validate PDF file
+            try:
+                binary_content = await file_manager.validate_pdf(file)
+            except HTTPException as val_http_err:
+                logger.warning(f"Validation HTTP exception for '{original_filename}': {val_http_err.detail}")
+                return JSONResponse(
+                    status_code=val_http_err.status_code,
+                    content=StandardResponse[None](
+                        success=False,
+                        message=str(val_http_err.detail),
+                        data=None,
+                    ).model_dump(),
+                )
+
+            # 2. Generate unique storage filename and persist to disk
+            unique_filename = file_manager.generate_unique_filename(original_filename)
+            saved_path = file_manager.save_file(binary_content, unique_filename)
+
             # 3. Parse Metadata and Page Text
             metadata, pages = pdf_parser.parse_bytes(binary_content)
 
@@ -89,7 +106,11 @@ async def upload_pdf(
                 metadata.title = original_filename
 
             # 4. Extract Structured Tables
-            tables = table_parser.parse_file(saved_path)
+            tables = []
+            try:
+                tables = table_parser.parse_file(saved_path)
+            except Exception as table_err:
+                logger.warning(f"Table parsing warning for '{original_filename}': {table_err}")
 
             # Assemble full document text
             combined_text = "\n\n".join(
@@ -98,39 +119,55 @@ async def upload_pdf(
 
             if combined_text.strip():
                 # 5. Chunking & Qdrant Vector DB Storage
-                logger.info(f"Storing vector embeddings for '{unique_filename}' in Qdrant")
-                vector_store.process_and_store_document(
-                    document_id=unique_filename,
-                    text=combined_text,
-                    source_type="pdf",
-                    original_filename=original_filename,
-                )
+                try:
+                    logger.info(f"Storing vector embeddings for '{unique_filename}' in Qdrant")
+                    vector_store.process_and_store_document(
+                        document_id=unique_filename,
+                        text=combined_text,
+                        source_type="pdf",
+                        original_filename=original_filename,
+                    )
+                except Exception as vector_err:
+                    logger.error(f"Vector storage warning for '{unique_filename}': {vector_err}", exc_info=True)
 
                 # 6. Hybrid Entity Extraction
-                logger.info(f"Extracting entities for '{unique_filename}'")
-                entity_res = await entity_extractor.extract_entities_async(
-                    text=combined_text,
-                    enable_spacy=True,
-                    enable_rules=True,
-                    enable_gemini=False,  # Fallback to rules/spacy when offline
-                )
+                extracted_entities = []
+                try:
+                    logger.info(f"Extracting entities for '{unique_filename}'")
+                    entity_res = await entity_extractor.extract_entities_async(
+                        text=combined_text,
+                        enable_spacy=True,
+                        enable_rules=True,
+                        enable_gemini=True,
+                    )
+                    extracted_entities = entity_res.entities
+                except Exception as ent_err:
+                    logger.error(f"Entity extraction warning for '{unique_filename}': {ent_err}", exc_info=True)
 
                 # 7. Hybrid Relationship Extraction
-                logger.info(f"Extracting relationships for '{unique_filename}'")
-                rel_res = await relationship_extractor.extract_relationships_async(
-                    text=combined_text,
-                    entities=entity_res.entities,
-                    enable_rules=True,
-                    enable_gemini=False,
-                )
+                extracted_relationships = []
+                try:
+                    logger.info(f"Extracting relationships for '{unique_filename}'")
+                    rel_res = await relationship_extractor.extract_relationships_async(
+                        text=combined_text,
+                        entities=extracted_entities,
+                        enable_rules=True,
+                        enable_gemini=True,
+                    )
+                    extracted_relationships = rel_res.relationships
+                except Exception as rel_err:
+                    logger.error(f"Relationship extraction warning for '{unique_filename}': {rel_err}", exc_info=True)
 
                 # 8. Automatic Neo4j Knowledge Graph Construction
-                logger.info(f"Building Neo4j Knowledge Graph for '{unique_filename}'")
-                graph_builder.build_graph_from_extraction(
-                    entities=entity_res.entities,
-                    relationships=rel_res.relationships,
-                    document_id=unique_filename,
-                )
+                try:
+                    logger.info(f"Building Neo4j Knowledge Graph for '{unique_filename}'")
+                    graph_builder.build_graph_from_extraction(
+                        entities=extracted_entities,
+                        relationships=extracted_relationships,
+                        document_id=unique_filename,
+                    )
+                except Exception as graph_err:
+                    logger.error(f"Graph construction warning for '{unique_filename}': {graph_err}", exc_info=True)
 
             # 9. Assemble structured response payload
             processed_data = PDFProcessedData(
@@ -148,10 +185,15 @@ async def upload_pdf(
                 f"Extraction failure while processing '{original_filename}': {parse_error}",
                 exc_info=True,
             )
-            file_manager.delete_file(saved_path)
-            raise HTTPException(
+            if saved_path:
+                file_manager.delete_file(saved_path)
+            return JSONResponse(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to process PDF '{original_filename}': {str(parse_error)}",
+                content=StandardResponse[None](
+                    success=False,
+                    message=f"Failed to process PDF '{original_filename}': {str(parse_error)}",
+                    data=None,
+                ).model_dump(),
             )
 
     response_payload: Union[PDFProcessedData, List[PDFProcessedData]] = (

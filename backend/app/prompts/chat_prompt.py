@@ -1,7 +1,7 @@
 """
 Conversational AI System Prompt Templates.
 
-Defines prompt templates instructing Gemini to answer compliance queries conversationally,
+Defines prompt templates instructing LLM Provider to answer compliance queries conversationally,
 grounded strictly in retrieved context and historical chat turns.
 """
 

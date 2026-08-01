@@ -38,8 +38,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
           <span className="font-headline-md text-headline-md font-extrabold text-blue-600">
             GraphAI Compliance
           </span>
-          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getRoleBadgeStyle(activeRole)} uppercase tracking-wider`}>
-            {activeRole.replace('_', ' ')}
+          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${getRoleBadgeStyle(activeRole || 'ADMIN')} uppercase tracking-wider`}>
+            {(activeRole || 'ADMIN').replace('_', ' ')}
           </span>
         </div>
 
@@ -66,7 +66,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
             title="Switch User Role for Testing"
           >
             <span className="material-symbols-outlined text-sm text-blue-600">published_with_changes</span>
-            <span>Switch Role: <strong>{activeRole}</strong></span>
+            <span>Switch Role: <strong>{activeRole || 'ADMIN'}</strong></span>
             <span className="material-symbols-outlined text-sm">arrow_drop_down</span>
           </button>
 
@@ -135,8 +135,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, onSearch }) => {
 
         <div className="flex items-center gap-3 p-1">
           <div className="text-right hidden lg:block">
-            <p className="font-label-md text-xs font-bold text-slate-900">{user.name}</p>
-            <p className="text-[10px] text-slate-500 font-medium">{user.email}</p>
+            <p className="font-label-md text-xs font-bold text-slate-900">{user?.name ?? 'User'}</p>
+            <p className="text-[10px] text-slate-500 font-medium">{user?.email ?? '—'}</p>
           </div>
           <div className="w-8 h-8 rounded-full bg-blue-100 border border-blue-200 flex items-center justify-center text-blue-700 font-bold text-xs">
             <span className="material-symbols-outlined text-lg">account_circle</span>

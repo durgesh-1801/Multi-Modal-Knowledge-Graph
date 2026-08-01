@@ -1,70 +1,20 @@
 import React, { useState } from 'react';
 import { AuditLog } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useAuditLogs } from '../hooks/useAuditLogs';
 
 export const AuditLogsView: React.FC = () => {
   const { user } = useAuth();
   const [filterAction, setFilterAction] = useState<string>('ALL');
+  const { data: logs = [], isLoading, error, refetch } = useAuditLogs(200);
 
-  const [logs] = useState<AuditLog[]>([
-    {
-      id: 'log_a8f102',
-      user_id: 'usr_admin_001',
-      user_email: 'admin@enterprise.com',
-      role: 'ADMIN',
-      action: 'UPDATE_SYSTEM_SETTINGS',
-      timestamp: '2026-08-01T23:40:12Z',
-      ip_address: '192.168.1.104',
-      details: 'Admin updated LLM provider to Google Gemini Pro and enforced strict audit mode.',
-    },
-    {
-      id: 'log_b9c203',
-      user_id: 'usr_officer_002',
-      user_email: 'officer@enterprise.com',
-      role: 'COMPLIANCE_OFFICER',
-      action: 'UPLOAD_DOCUMENT',
-      timestamp: '2026-08-01T22:15:00Z',
-      ip_address: '192.168.1.110',
-      details: 'Compliance Officer uploaded HIPAA_Section_164_Audit.pdf into Knowledge Graph.',
-    },
-    {
-      id: 'log_c1d304',
-      user_id: 'usr_admin_001',
-      user_email: 'admin@enterprise.com',
-      role: 'ADMIN',
-      action: 'CHANGE_USER_ROLE',
-      timestamp: '2026-08-01T20:05:40Z',
-      ip_address: '192.168.1.104',
-      details: 'Admin updated role for user michael.c@enterprise.com to COMPLIANCE_OFFICER.',
-    },
-    {
-      id: 'log_d2e405',
-      user_id: 'usr_auditor_003',
-      user_email: 'auditor@enterprise.com',
-      role: 'AUDITOR',
-      action: 'ASK_AI_QUERY',
-      timestamp: '2026-08-01T18:30:10Z',
-      ip_address: '192.168.1.125',
-      details: 'Auditor queried Graph RAG engine: "Retrieve all unmasked PII entities in Q3 audit".',
-    },
-    {
-      id: 'log_e3f506',
-      user_id: 'usr_admin_001',
-      user_email: 'admin@enterprise.com',
-      role: 'ADMIN',
-      action: 'MERGE_ENTITIES',
-      timestamp: '2026-08-01T15:20:00Z',
-      ip_address: '192.168.1.104',
-      details: 'Admin merged graph nodes ["HIPAA Rule 1"] into canonical node "HIPAA Policy".',
-    },
-  ]);
-
-  const filteredLogs = logs.filter((log) => {
+  const filteredLogs = (logs || []).filter((log) => {
     if (filterAction === 'ALL') return true;
-    return log.action.includes(filterAction);
+    return log?.action ? log.action.includes(filterAction) : false;
   });
 
-  const getActionBadgeStyle = (action: str) => {
+  const getActionBadgeStyle = (action?: string) => {
+    if (!action) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     if (action.includes('LOGIN') || action.includes('USER')) return 'bg-purple-100 text-purple-700 border-purple-200';
     if (action.includes('UPLOAD') || action.includes('DOCUMENT')) return 'bg-blue-100 text-blue-700 border-blue-200';
     if (action.includes('MERGE') || action.includes('GRAPH')) return 'bg-amber-100 text-amber-700 border-amber-200';
@@ -87,19 +37,29 @@ export const AuditLogsView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
-          <span className="text-xs font-bold text-slate-600 pl-1">Filter Action:</span>
-          <select
-            value={filterAction}
-            onChange={(e) => setFilterAction(e.target.value)}
-            className="bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer"
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-xl border border-slate-200">
+            <span className="text-xs font-bold text-slate-600 pl-1">Filter Action:</span>
+            <select
+              value={filterAction}
+              onChange={(e) => setFilterAction(e.target.value)}
+              className="bg-white border border-slate-200 text-xs font-bold text-slate-800 rounded-lg px-2.5 py-1 focus:outline-none cursor-pointer"
+            >
+              <option value="ALL">All System Actions</option>
+              <option value="USER">User Changes</option>
+              <option value="UPLOAD">Uploads</option>
+              <option value="GRAPH">Graph Changes</option>
+              <option value="SETTINGS">Settings Changes</option>
+              <option value="LOGIN">Login Events</option>
+            </select>
+          </div>
+          <button
+            onClick={() => refetch()}
+            className="p-2 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 cursor-pointer transition-colors"
+            title="Refresh logs"
           >
-            <option value="ALL">All System Actions</option>
-            <option value="USER">User Changes</option>
-            <option value="UPLOAD">Uploads</option>
-            <option value="GRAPH">Graph Changes</option>
-            <option value="SETTINGS">Settings Changes</option>
-          </select>
+            <span className="material-symbols-outlined text-base text-slate-600">refresh</span>
+          </button>
         </div>
       </div>
 
@@ -114,44 +74,79 @@ export const AuditLogsView: React.FC = () => {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-700">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold text-[10px]">
-              <tr>
-                <th className="px-6 py-3.5">Timestamp (UTC)</th>
-                <th className="px-6 py-3.5">User</th>
-                <th className="px-6 py-3.5">Role</th>
-                <th className="px-6 py-3.5">Action</th>
-                <th className="px-6 py-3.5">IP Address</th>
-                <th className="px-6 py-3.5">Audit Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
-              {filteredLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                  <td className="px-6 py-4 font-mono text-[11px] text-slate-500">
-                    {new Date(log.timestamp).toLocaleString()}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-slate-900">{log.user_email}</span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase border border-slate-200">
-                      {log.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md border uppercase tracking-wider ${getActionBadgeStyle(log.action)}`}>
-                      {log.action}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-[11px] text-slate-600">{log.ip_address}</td>
-                  <td className="px-6 py-4 text-slate-700 max-w-xs truncate">{log.details}</td>
+        {/* Loading Skeleton */}
+        {isLoading && (
+          <div className="p-6 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-10 bg-slate-100 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && !isLoading && (
+          <div className="p-8 text-center">
+            <span className="material-symbols-outlined text-3xl text-red-400 mb-2 block">error_outline</span>
+            <p className="text-sm font-semibold text-slate-700 mb-1">Failed to load audit logs</p>
+            <p className="text-xs text-slate-500 mb-4">The backend may not be running or the token may have expired.</p>
+            <button
+              onClick={() => refetch()}
+              className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && filteredLogs.length === 0 && (
+          <div className="p-8 text-center">
+            <span className="material-symbols-outlined text-3xl text-slate-300 mb-2 block">manage_search</span>
+            <p className="text-sm text-slate-500">No audit log entries found{filterAction !== 'ALL' ? ` for filter "${filterAction}"` : ''}.</p>
+          </div>
+        )}
+
+        {/* Data Table */}
+        {!isLoading && filteredLogs.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-700">
+              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-bold text-[10px]">
+                <tr>
+                  <th className="px-6 py-3.5">Timestamp (UTC)</th>
+                  <th className="px-6 py-3.5">User</th>
+                  <th className="px-6 py-3.5">Role</th>
+                  <th className="px-6 py-3.5">Action</th>
+                  <th className="px-6 py-3.5">IP Address</th>
+                  <th className="px-6 py-3.5">Audit Details</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 font-medium">
+                {filteredLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4 font-mono text-[11px] text-slate-500">
+                      {log?.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-slate-900">{log?.user_email ?? '—'}</span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 uppercase border border-slate-200">
+                        {log?.role ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-md border uppercase tracking-wider ${getActionBadgeStyle(log?.action)}`}>
+                        {log?.action ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-mono text-[11px] text-slate-600">{log?.ip_address ?? '—'}</td>
+                    <td className="px-6 py-4 text-slate-700 max-w-xs truncate" title={log?.details ?? ''}>{log?.details ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

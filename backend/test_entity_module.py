@@ -4,7 +4,7 @@ Automated Verification Script for Entity Extraction Module.
 Validates:
 1. SpacyExtractor (Stage 1 NER)
 2. Rule-Based Regex Extractor & EntityNormalizer (Stage 2 & Normalization)
-3. Gemini LLM Extractor (Stage 3)
+3. Groq LLM Extractor (Stage 3)
 4. Full EntityExtractor Hybrid Pipeline
 5. API Endpoint: POST /api/v1/extract/entities (single & batch mode)
 """
