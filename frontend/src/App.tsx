@@ -40,17 +40,17 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-on-surface flex">
+    <div className="min-h-screen bg-slate-50 text-slate-900 flex">
       {/* Fixed Sidebar */}
       <Sidebar activeTab={activeTab} onSelectTab={handleNavigate} />
 
       {/* Main Content Area */}
-      <div className="flex-1 ml-60 flex flex-col min-h-screen">
+      <div className="flex-1 ml-60 flex flex-col min-h-screen bg-slate-50">
         {/* Fixed Header */}
         <Header activeTab={activeTab} />
 
         {/* Dynamic Route View */}
-        <main className="flex-1 pt-20 p-8 overflow-x-hidden">
+        <main className="flex-1 pt-20 p-8 overflow-x-hidden bg-slate-50">
           {renderActiveView()}
         </main>
       </div>
