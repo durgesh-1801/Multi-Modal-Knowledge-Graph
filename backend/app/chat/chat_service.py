@@ -28,7 +28,7 @@ class ChatService:
     Production-ready AI Chat Orchestrator Service for enterprise compliance guidance.
     """
 
-    def __init__() -> None:
+    def __init__(self) -> None:
         self.conv_manager: ConversationManager = ConversationManager()
         self.classifier: QueryClassifier = QueryClassifier()
         self.rag_engine: GraphRAGEngine = GraphRAGEngine()
