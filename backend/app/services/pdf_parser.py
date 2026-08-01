@@ -7,8 +7,15 @@ to pdfplumber and automated OCR service integration (OCRService.needs_ocr) for s
 
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
-import fitz  # PyMuPDF
-import pdfplumber
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
 
 from app.core.logging import logger
 from app.schemas.upload import PDFMetadata, PDFPage

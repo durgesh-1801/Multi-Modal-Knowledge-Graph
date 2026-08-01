@@ -12,9 +12,15 @@ Provides an OpenCV-based pipeline for enhancing image quality prior to OCR text 
 
 import io
 from typing import Union
-import cv2
-import numpy as np
-from PIL import Image
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 from app.core.logging import logger
 

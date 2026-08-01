@@ -7,9 +7,12 @@ volume normalization, 16 kHz resampling, and silence trimming using Pydub / Wave
 
 from pathlib import Path
 from typing import Tuple, Union
-from pydub import AudioSegment
-from pydub.effects import normalize
-from pydub.silence import detect_leading_silence
+try:
+    from pydub import AudioSegment
+    from pydub.effects import normalize
+    from pydub.silence import detect_leading_silence
+except ImportError:
+    AudioSegment = normalize = detect_leading_silence = None
 
 from app.core.logging import logger
 

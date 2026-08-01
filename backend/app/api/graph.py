@@ -20,6 +20,11 @@ from app.schemas.graph import (
 )
 from app.vector.vector_store import VectorStoreService
 
+from app.core.audit import record_audit_log
+from app.core.rbac import Permission
+from app.core.security import require_permission
+from app.schemas.rbac import UserResponse
+
 router = APIRouter()
 vector_store = VectorStoreService()
 
@@ -34,6 +39,7 @@ vector_store = VectorStoreService()
 async def get_graph_overview(
     limit: int = Query(default=50, ge=1, le=500, description="Max nodes to retrieve"),
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.VIEW_GRAPH)),
 ) -> StandardResponse[SubgraphResponse]:
     """Retrieves full overview or top-level subgraph of the Knowledge Graph."""
     logger.info(f"Retrieving Knowledge Graph overview (limit={limit})")
@@ -56,6 +62,7 @@ async def get_subgraph(
     entity_id: str = Query(..., description="Target entity ID or name to center neighborhood search around"),
     depth: int = Query(default=2, ge=1, le=5, description="Traversal radius depth"),
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.VIEW_GRAPH)),
 ) -> StandardResponse[SubgraphResponse]:
     """Retrieves entity neighborhood subgraph for a given entity_id and traversal depth."""
     logger.info(f"Retrieving subgraph for entity '{entity_id}' with depth {depth}")
@@ -77,6 +84,7 @@ async def get_subgraph(
 async def search_graph(
     query: str = Query(..., min_length=1, description="Search term query string"),
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.SEARCH_GRAPH)),
 ) -> StandardResponse[List[GraphNode]]:
     """Searches graph nodes matching query string."""
     logger.info(f"Searching Knowledge Graph for query: '{query}'")
@@ -97,6 +105,7 @@ async def search_graph(
 )
 async def get_statistics(
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.VIEW_ANALYTICS)),
 ) -> StandardResponse[GraphStatistics]:
     """Returns analytics and summary metrics of the Knowledge Graph."""
     logger.info("Computing Knowledge Graph statistics and analytics")
@@ -118,8 +127,9 @@ async def get_statistics(
 async def merge_duplicate_entities(
     payload: EntityMergeRequest,
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.MERGE_ENTITIES)),
 ) -> StandardResponse[bool]:
-    """Merges duplicate entities into a canonical entity node."""
+    """Merges duplicate entities into a canonical entity node. (Admin Only)"""
     logger.info(
         f"Merging duplicate entities {payload.duplicate_names} into canonical entity '{payload.canonical_name}'"
     )
@@ -143,8 +153,9 @@ async def merge_duplicate_entities(
 async def delete_document(
     document_id: str,
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.DELETE_DOCUMENT)),
 ) -> StandardResponse[dict]:
-    """Deletes document graph elements and vector store embeddings."""
+    """Deletes document graph elements and vector store embeddings. (Admin Only)"""
     logger.info(f"Initiating document graph and vector deletion for document ID: '{document_id}'")
 
     # 1. Delete document graph relationships and clean orphaned nodes

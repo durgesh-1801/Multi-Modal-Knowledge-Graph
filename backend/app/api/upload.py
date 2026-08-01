@@ -22,6 +22,11 @@ from app.services.relationship_extractor import RelationshipExtractor
 from app.services.table_parser import TableParser
 from app.vector.vector_store import VectorStoreService
 
+from app.core.audit import record_audit_log
+from app.core.rbac import Permission
+from app.core.security import require_permission
+from app.schemas.rbac import UserResponse
+
 router = APIRouter()
 
 # Initialize service instances for upload router
@@ -49,6 +54,7 @@ async def upload_pdf(
         description="One or multiple PDF compliance documents to upload.",
     ),
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.UPLOAD_DOCUMENT)),
 ) -> StandardResponse[Union[PDFProcessedData, List[PDFProcessedData]]]:
     """
     Handles PDF document upload, disk persistence, text/table parsing, Qdrant vector storage,

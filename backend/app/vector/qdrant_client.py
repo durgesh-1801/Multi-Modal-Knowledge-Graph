@@ -6,9 +6,14 @@ payload deletion, point retrieval, health status, and metadata-filtered similari
 """
 
 from typing import Any, Dict, List, Optional, Union
-from qdrant_client import QdrantClient
-from qdrant_client.http import models as qmodels
-from qdrant_client.http.models import Distance, VectorParams, Filter, FieldCondition, MatchValue
+try:
+    from qdrant_client import QdrantClient
+    from qdrant_client.http import models as qmodels
+    from qdrant_client.http.models import Distance, VectorParams, Filter, FieldCondition, MatchValue
+except ImportError:
+    QdrantClient = None
+    qmodels = None
+    Distance = VectorParams = Filter = FieldCondition = MatchValue = None
 
 from app.core.config import settings
 from app.core.logging import logger

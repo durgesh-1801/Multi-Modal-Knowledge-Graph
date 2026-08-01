@@ -11,7 +11,11 @@ Isolates all file, directory, and filesystem storage operations:
 import uuid
 from pathlib import Path
 from typing import Union
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import settings

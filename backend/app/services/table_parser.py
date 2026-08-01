@@ -8,7 +8,10 @@ system dependency issues (e.g. missing Ghostscript) or processing errors.
 
 from pathlib import Path
 from typing import List, Union
-import pdfplumber
+try:
+    import pdfplumber
+except ImportError:
+    pdfplumber = None
 
 from app.core.logging import logger
 from app.schemas.upload import ExtractedTable

@@ -10,11 +10,13 @@ Provides endpoints for conversational AI compliance guidance, history management
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.chat.chat_service import ChatService
 from app.core.logging import logger
+from app.core.rbac import Permission
+from app.core.security import require_permission
 from app.schemas.chat import (
     BatchChatRequest,
     BatchChatResponse,
@@ -23,6 +25,7 @@ from app.schemas.chat import (
     ChatResponse,
 )
 from app.schemas.common import StandardResponse
+from app.schemas.rbac import UserResponse
 
 router = APIRouter()
 chat_service = ChatService()
@@ -44,6 +47,7 @@ class ClearHistoryRequest(BaseModel):
 )
 async def chat(
     payload: ChatRequest,
+    current_user: UserResponse = Depends(require_permission(Permission.ASK_AI)),
 ) -> StandardResponse[ChatResponse]:
     """
     Primary conversational chat query endpoint handler.

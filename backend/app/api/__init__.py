@@ -1,10 +1,15 @@
 """
 API Router package initialization.
 
-Aggregates all application feature sub-routers (upload, chat, ocr, audio, entity, relationship, embeddings, rag) into a master API router.
+Aggregates all application feature sub-routers (auth, users, projects, settings, logs, upload, chat, ocr, audio, entity, relationship, embeddings, rag) into a master API router.
 """
 
 from fastapi import APIRouter
+from app.api.auth import router as auth_router
+from app.api.users import router as users_router
+from app.api.projects import router as projects_router
+from app.api.settings import router as settings_router
+from app.api.logs import router as logs_router
 from app.api.upload import router as upload_router
 from app.api.chat import router as chat_router
 from app.api.ocr import router as ocr_router
@@ -17,7 +22,14 @@ from app.api.graph import router as graph_router
 
 api_router = APIRouter(prefix="/api/v1")
 
-# Include feature routers
+# RBAC Enterprise Auth & Management Routers
+api_router.include_router(auth_router, prefix="/auth", tags=["Authentication & JWT"])
+api_router.include_router(users_router, prefix="/users", tags=["User Management (Admin Only)"])
+api_router.include_router(projects_router, prefix="/projects", tags=["Project Management"])
+api_router.include_router(settings_router, prefix="/settings", tags=["System Settings (Admin Only)"])
+api_router.include_router(logs_router, prefix="/logs", tags=["Audit Logging (Admin Only)"])
+
+# Feature Workload Routers
 api_router.include_router(upload_router, prefix="/upload", tags=["Document Upload"])
 api_router.include_router(audio_router, prefix="/upload/audio", tags=["Audio Transcription"])
 api_router.include_router(chat_router, prefix="/chat", tags=["Compliance Chat & Queries"])

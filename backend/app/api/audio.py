@@ -7,7 +7,7 @@ Provides endpoints for ingesting, validating, preprocessing, and transcribing au
 
 from pathlib import Path
 from typing import List, Union
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from app.core.config import settings
 from app.core.logging import logger
@@ -19,6 +19,11 @@ from app.schemas.common import StandardResponse
 from app.services.audio_preprocessor import AudioPreprocessor
 from app.services.audio_transcriber import AudioTranscriber
 from app.services.file_manager import FileManager
+
+from app.core.audit import record_audit_log
+from app.core.rbac import Permission
+from app.core.security import require_permission
+from app.schemas.rbac import UserResponse
 
 router = APIRouter()
 
@@ -54,6 +59,7 @@ async def upload_audio(
     files: List[UploadFile] = File(
         ..., description="One or multiple audio files to upload and transcribe."
     ),
+    current_user: UserResponse = Depends(require_permission(Permission.UPLOAD_AUDIO)),
 ) -> StandardResponse[Union[AudioUploadResponse, BatchTranscriptResponse]]:
     """
     Audio upload and transcription endpoint handler.

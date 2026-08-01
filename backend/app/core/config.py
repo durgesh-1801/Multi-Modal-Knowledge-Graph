@@ -7,16 +7,21 @@ or defaulted to safe fallback values.
 """
 
 from functools import lru_cache
+import os
 from typing import Optional
-from pydantic import model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import BaseModel, model_validator
+
+try:
+    from pydantic_settings import BaseSettings, SettingsConfigDict
+    BASE_CLASS = BaseSettings
+except ImportError:
+    BASE_CLASS = BaseModel
+    SettingsConfigDict = None
 
 
-class Settings(BaseSettings):
+class Settings(BASE_CLASS):
     """
     Application Settings configuration schema.
-
-    Loads values automatically from environment variables or .env file.
     """
 
     # Application Configuration
@@ -83,21 +88,11 @@ class Settings(BaseSettings):
             self.MAX_UPLOAD_SIZE = self.MAX_UPLOAD_SIZE_MB * 1024 * 1024
         return self
 
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="ignore",
-        case_sensitive=True,
-    )
-
 
 @lru_cache()
 def get_settings() -> Settings:
     """
     Retrieves a cached instance of application settings.
-
-    Returns:
-        Settings: Singleton instance of application configuration.
     """
     return Settings()
 

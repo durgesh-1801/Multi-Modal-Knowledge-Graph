@@ -9,9 +9,16 @@ confidence score tracking, and result merging.
 import io
 import time
 from typing import List, Optional, Tuple, Union
-import fitz  # PyMuPDF
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    fitz = None
+
 import numpy as np
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 from app.core.logging import logger
 from app.schemas.ocr import OCRPage
