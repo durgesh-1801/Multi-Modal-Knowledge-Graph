@@ -125,11 +125,10 @@ class MockGraphInterface(AbstractGraphInterface):
                 )
         return results
 
-    def get_subgraph(self, query: str = "", depth: int = 2) -> SubgraphResponse:
+    def get_subgraph(self, query: str, depth: int = 2) -> SubgraphResponse:
         logger.info(f"MockGraphInterface.get_subgraph('{query}', depth={depth})")
         if not query or not query.strip():
-            unique_nodes = list({n.id: n for n in self._nodes.values()}.values())
-            return SubgraphResponse(nodes=unique_nodes, edges=list(self._edges))
+            return SubgraphResponse(nodes=list(self._nodes.values()), edges=list(self._edges))
         matched_nodes = self.search_graph(query)
         matched_ids = {n.id.lower() for n in matched_nodes}
 
@@ -240,65 +239,18 @@ class MockGraphInterface(AbstractGraphInterface):
         return {"nodes_deleted": nodes_deleted, "edges_deleted": edges_deleted}
 
     def get_graph_statistics(self) -> GraphStatistics:
-        unique_nodes = list({n.id: n for n in self._nodes.values()}.values())
-        node_cnt = len(unique_nodes)
+        node_cnt = len(self._nodes)
         edge_cnt = len(self._edges)
 
         doc_ids = set()
         entity_dist: Dict[str, int] = {}
-        degrees: Dict[str, int] = {n.id: 0 for n in unique_nodes}
-
-        for n in unique_nodes:
+        for n in self._nodes.values():
             doc_ids.update(n.source_documents)
             entity_dist[n.type] = entity_dist.get(n.type, 0) + 1
 
         rel_dist: Dict[str, int] = {}
         for e in self._edges:
             rel_dist[e.type] = rel_dist.get(e.type, 0) + 1
-            src_key = e.source.lower()
-            tgt_key = e.target.lower()
-            for n in unique_nodes:
-                if n.id.lower() == src_key or n.name.lower() == src_key:
-                    degrees[n.id] = degrees.get(n.id, 0) + 1
-                if n.id.lower() == tgt_key or n.name.lower() == tgt_key:
-                    degrees[n.id] = degrees.get(n.id, 0) + 1
-
-        isolated_count = sum(1 for d in degrees.values() if d == 0)
-
-        # BFS for connected components
-        adj: Dict[str, set] = {n.id: set() for n in unique_nodes}
-        node_by_id = {n.id: n for n in unique_nodes}
-        for e in self._edges:
-            src_node = next((n for n in unique_nodes if n.id.lower() == e.source.lower() or n.name.lower() == e.source.lower()), None)
-            tgt_node = next((n for n in unique_nodes if n.id.lower() == e.target.lower() or n.name.lower() == e.target.lower()), None)
-            if src_node and tgt_node:
-                adj[src_node.id].add(tgt_node.id)
-                adj[tgt_node.id].add(src_node.id)
-
-        visited = set()
-        components = []
-        for n in unique_nodes:
-            if n.id not in visited:
-                comp = []
-                queue = [n.id]
-                visited.add(n.id)
-                while queue:
-                    curr = queue.pop(0)
-                    comp.append(curr)
-                    for nxt in adj.get(curr, []):
-                        if nxt not in visited:
-                            visited.add(nxt)
-                            queue.append(nxt)
-                components.append(comp)
-
-        largest_comp_size = max([len(c) for c in components], default=0)
-        conn_comp_cnt = len(components)
-
-        most_conn = [
-            {"name": node_by_id[nid].name, "type": node_by_id[nid].type, "degree": deg}
-            for nid, deg in sorted(degrees.items(), key=lambda x: x[1], reverse=True)[:10]
-            if nid in node_by_id
-        ]
 
         avg_deg = (2.0 * edge_cnt / node_cnt) if node_cnt > 0 else 0.0
         density = (2.0 * edge_cnt / (node_cnt * (node_cnt - 1))) if node_cnt > 1 else 0.0
@@ -311,12 +263,10 @@ class MockGraphInterface(AbstractGraphInterface):
             relationship_types=rel_dist,
             average_degree=round(avg_deg, 2),
             graph_density=round(density, 4),
-            most_connected_entities=most_conn,
+            most_connected_entities=[],
             entity_distribution=entity_dist,
             relationship_distribution=rel_dist,
-            largest_connected_component_size=largest_comp_size,
-            connected_components_count=conn_comp_cnt,
-            isolated_nodes_count=isolated_count,
+            largest_connected_component_size=node_cnt,
         )
 
 
@@ -408,22 +358,31 @@ class Neo4jGraphInterface(AbstractGraphInterface):
             results = list(entity_map.values())
         return results
 
-    def get_subgraph(self, query: str = "", depth: int = 2) -> SubgraphResponse:
+    def get_subgraph(self, query: str, depth: int = 2) -> SubgraphResponse:
+        cypher = """
+        MATCH (n:Entity)
+        WHERE toLower(n.name) CONTAINS toLower($search_text)
+           OR toLower(n.type) CONTAINS toLower($search_text)
+           OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($search_text))
+        WITH n LIMIT 20
+        MATCH path = (n)-[r*1..2]-(neighbor:Entity)
+        RETURN path LIMIT 100
+        """
         nodes_map: Dict[str, GraphNode] = {}
         edges_list: List[GraphRelationship] = []
 
         with self._driver.session(database=self.database) as session:
-            if not query or not query.strip():
-                # Fetch ALL nodes in database
-                cypher_nodes = "MATCH (n:Entity) RETURN n LIMIT 5000"
-                rec_nodes = self._read_tx(session, lambda tx: list(tx.run(cypher_nodes)))
-                for rec in rec_nodes:
-                    node = rec["n"]
-                    nid = str(node.get("id", node.get("name", "")))
-                    if nid and nid not in nodes_map:
-                        nodes_map[nid] = GraphNode(
-                            id=nid,
-                            name=node.get("name", nid),
+            records = self._read_tx(session, lambda tx: list(tx.run(cypher, search_text=query)))
+            for rec in records:
+                path = rec["path"]
+                if not path:
+                    continue
+                for node in path.nodes:
+                    node_id = str(node.get("id", node.get("name", "")))
+                    if node_id and node_id not in nodes_map:
+                        nodes_map[node_id] = GraphNode(
+                            id=node_id,
+                            name=node.get("name", node_id),
                             type=node.get("type", "Entity"),
                             aliases=list(node.get("aliases", [])),
                             source_documents=list(node.get("source_documents", [])),
@@ -433,79 +392,22 @@ class Neo4jGraphInterface(AbstractGraphInterface):
                             updated_at=str(node.get("updated_at", "")),
                             properties=dict(node),
                         )
-
-                # Fetch ALL relationships in database
-                cypher_edges = """
-                MATCH (a:Entity)-[r]->(b:Entity)
-                RETURN a.id AS source_id, a.name AS source_name,
-                       b.id AS target_id, b.name AS target_name,
-                       r
-                LIMIT 10000
-                """
-                rec_edges = self._read_tx(session, lambda tx: list(tx.run(cypher_edges)))
-                for rec in rec_edges:
-                    src = rec["source_id"] or rec["source_name"]
-                    tgt = rec["target_id"] or rec["target_name"]
-                    rel = rec["r"]
-                    if src and tgt:
-                        edges_list.append(
-                            GraphRelationship(
-                                id=str(getattr(rel, "element_id", getattr(rel, "id", f"{src}_{tgt}"))),
-                                source=src,
-                                target=tgt,
-                                type=getattr(rel, "type", "RELATED"),
-                                confidence=float(rel.get("confidence", 1.0)),
-                                source_document=rel.get("source_document"),
-                                page_number=rel.get("page_number"),
-                                properties=dict(rel),
-                            )
+                for rel in path.relationships:
+                    start_node = rel.start_node.get("name", rel.start_node.get("id"))
+                    end_node = rel.end_node.get("name", rel.end_node.get("id"))
+                    edges_list.append(
+                        GraphRelationship(
+                            source=start_node,
+                            target=end_node,
+                            type=rel.type,
+                            confidence=float(rel.get("confidence", 1.0)),
+                            source_document=rel.get("source_document"),
+                            page_number=rel.get("page_number"),
                         )
-            else:
-                cypher = """
-                MATCH (n:Entity)
-                WHERE toLower(n.name) CONTAINS toLower($search_text)
-                   OR toLower(n.type) CONTAINS toLower($search_text)
-                   OR ANY(alias IN n.aliases WHERE toLower(alias) CONTAINS toLower($search_text))
-                WITH n LIMIT 50
-                MATCH path = (n)-[r*1..2]-(neighbor:Entity)
-                RETURN path LIMIT 500
-                """
-                records = self._read_tx(session, lambda tx: list(tx.run(cypher, search_text=query)))
-                for rec in records:
-                    path = rec["path"]
-                    if not path:
-                        continue
-                    for node in path.nodes:
-                        node_id = str(node.get("id", node.get("name", "")))
-                        if node_id and node_id not in nodes_map:
-                            nodes_map[node_id] = GraphNode(
-                                id=node_id,
-                                name=node.get("name", node_id),
-                                type=node.get("type", "Entity"),
-                                aliases=list(node.get("aliases", [])),
-                                source_documents=list(node.get("source_documents", [])),
-                                page_numbers=list(node.get("page_numbers", [])),
-                                confidence=float(node.get("confidence", 1.0)),
-                                created_at=str(node.get("created_at", "")),
-                                updated_at=str(node.get("updated_at", "")),
-                                properties=dict(node),
-                            )
-                    for rel in path.relationships:
-                        start_node = rel.start_node.get("id", rel.start_node.get("name"))
-                        end_node = rel.end_node.get("id", rel.end_node.get("name"))
-                        edges_list.append(
-                            GraphRelationship(
-                                source=start_node,
-                                target=end_node,
-                                type=rel.type,
-                                confidence=float(rel.get("confidence", 1.0)),
-                                source_document=rel.get("source_document"),
-                                page_number=rel.get("page_number"),
-                            )
-                        )
+                    )
 
         # Fallback if query returns empty path
-        if not nodes_map and query:
+        if not nodes_map:
             nodes_map = {n.id: n for n in self.search_graph(query)}
 
         return SubgraphResponse(nodes=list(nodes_map.values()), edges=edges_list)

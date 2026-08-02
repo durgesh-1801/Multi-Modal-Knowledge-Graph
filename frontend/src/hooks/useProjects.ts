@@ -3,7 +3,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '../lib/api';
-import { Project, ProjectMember } from '../types';
+import { Project } from '../types';
 
 const PROJECTS_KEY = ['projects'] as const;
 

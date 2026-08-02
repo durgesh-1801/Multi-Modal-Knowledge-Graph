@@ -104,12 +104,6 @@ class GraphStatistics(BaseModel):
     largest_connected_component_size: int = Field(
         default=0, description="Node count of largest connected component"
     )
-    connected_components_count: int = Field(
-        default=0, description="Number of connected components"
-    )
-    isolated_nodes_count: int = Field(
-        default=0, description="Number of isolated nodes without any edges"
-    )
 
 
 class GraphQueryRequest(BaseModel):

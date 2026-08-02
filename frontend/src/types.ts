@@ -131,9 +131,6 @@ export interface GraphStatistics {
   average_degree?: number;
   entity_types?: Record<string, number>;
   relationship_types?: Record<string, number>;
-  connected_components_count?: number;
-  isolated_nodes_count?: number;
-  largest_connected_component_size?: number;
 }
 
 /** Matches backend SubgraphResponse schema */
@@ -141,25 +138,14 @@ export interface BackendGraphNode {
   id: string;
   name: string;
   type: string;
-  aliases?: string[];
-  source_documents?: string[];
-  page_numbers?: number[];
-  confidence?: number;
-  created_at?: string;
-  updated_at?: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
 }
 
 export interface BackendGraphEdge {
-  id?: string;
   source: string;
   target: string;
   type: string;
-  confidence?: number;
-  source_document?: string;
-  page_number?: number;
-  created_at?: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
 }
 
 export interface SubgraphResponse {
