@@ -137,6 +137,42 @@ async def embeddings_health() -> StandardResponse[dict]:
     )
 
 
+@router.get(
+    "/stats",
+    response_model=StandardResponse[dict],
+    status_code=status.HTTP_200_OK,
+    summary="Get Qdrant Vector Store Statistics",
+    description="Returns live vector point count, collection name, and embedding model info from Qdrant.",
+)
+async def get_embeddings_stats() -> StandardResponse[dict]:
+    """
+    Returns live statistics from the Qdrant vector store collection.
+    Used by the Audit Report to populate the live vector count field.
+    """
+    try:
+        health = vector_store_service.get_health()
+        vector_count = vector_store_service.get_vector_count()
+        return StandardResponse[dict](
+            success=True,
+            message="Embedding statistics retrieved successfully",
+            data={
+                "vector_count": vector_count,
+                "collection_name": health.get("collection_name", ""),
+                "embedding_model": health.get("embedding_model", ""),
+                "embedding_dimension": health.get("embedding_dimension", 0),
+                "qdrant_connected": health.get("qdrant_connected", False),
+            },
+        )
+    except Exception as err:
+        logger.error(f"Failed to retrieve embedding stats: {err}", exc_info=True)
+        return StandardResponse[dict](
+            success=False,
+            message=f"Could not retrieve embedding statistics: {str(err)}",
+            data={"vector_count": 0, "collection_name": "", "embedding_model": "", "embedding_dimension": 0, "qdrant_connected": False},
+        )
+
+
+
 @router.delete(
     "/document/{document_id}",
     response_model=StandardResponse[dict],

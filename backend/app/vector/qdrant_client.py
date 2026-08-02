@@ -19,6 +19,18 @@ from app.core.config import settings
 from app.core.logging import logger
 
 
+_SHARED_QDRANT_CLIENT: Optional[Any] = None
+_SHARED_QDRANT_MANAGER: Optional["QdrantClientManager"] = None
+
+
+def get_qdrant_manager() -> "QdrantClientManager":
+    """Singleton getter for shared QdrantClientManager instance."""
+    global _SHARED_QDRANT_MANAGER
+    if _SHARED_QDRANT_MANAGER is None:
+        _SHARED_QDRANT_MANAGER = QdrantClientManager()
+    return _SHARED_QDRANT_MANAGER
+
+
 class QdrantClientManager:
     """
     Reusable Qdrant Vector DB client providing connection resilience, collection creation,
@@ -34,38 +46,60 @@ class QdrantClientManager:
 
     def connect(self) -> QdrantClient:
         """
-        Establishes connection to Qdrant Cloud or local server.
-        Only fallbacks to in-memory mode if BOTH QDRANT_URL and QDRANT_API_KEY are missing.
+        Establishes connection to Qdrant:
+        1. Shared singleton client (re-use across service instances)
+        2. Local URL + API Key (Qdrant Cloud or remote server)
+        3. Local disk-persistent path (qdrant_storage/) ← DEFAULT
+        4. In-memory fallback (last resort — data lost on restart)
         """
-        if self._client is None:
-            url = self.url or settings.QDRANT_URL
-            api_key = self.api_key or settings.QDRANT_API_KEY
+        global _SHARED_QDRANT_CLIENT
+        if self._client is not None:
+            return self._client
 
-            if not url and not api_key:
-                logger.warning("Both QDRANT_URL and QDRANT_API_KEY are missing. Initializing local in-memory Qdrant Client.")
-                self._client = QdrantClient(":memory:")
-                logger.info("In-memory Qdrant client initialized successfully.")
-                return self._client
+        if _SHARED_QDRANT_CLIENT is not None:
+            self._client = _SHARED_QDRANT_CLIENT
+            return self._client
 
-            is_cloud = bool(url and ("cloud.qdrant.io" in url or (api_key and len(api_key) > 10)))
-            conn_label = "Qdrant Cloud" if is_cloud else "Qdrant Vector Store"
+        if QdrantClient is None:
+            logger.warning("qdrant_client module is not installed. Returning None for vector store.")
+            return None
+
+        url = self.url or settings.QDRANT_URL
+        api_key = self.api_key or settings.QDRANT_API_KEY
+        local_path = getattr(settings, "QDRANT_LOCAL_PATH", "./qdrant_storage")
+
+        # Option 1: Remote Qdrant Cloud / Server
+        if url and api_key and api_key != "your_qdrant_api_key_here":
+            is_cloud = bool("cloud.qdrant.io" in url or len(api_key) > 10)
+            conn_label = "Qdrant Cloud" if is_cloud else "Qdrant Remote"
             logger.info(f"Connecting to {conn_label} at '{url}'")
-
             try:
                 self._client = QdrantClient(url=url, api_key=api_key, timeout=10.0)
-                # Test connectivity
                 self._client.get_collections()
-                if is_cloud:
-                    logger.info("Connected to Qdrant Cloud")
-                else:
-                    logger.info("Successfully connected to Qdrant Vector Store.")
+                _SHARED_QDRANT_CLIENT = self._client
+                logger.info(f"Connected to {conn_label}.")
+                return self._client
             except Exception as err:
-                logger.warning(
-                    f"Unable to connect to {conn_label} at '{url}' ({err}). Initializing local in-memory Qdrant Client."
-                )
-                self._client = QdrantClient(":memory:")
-                logger.info("In-memory Qdrant client initialized successfully.")
+                logger.warning(f"Unable to connect to {conn_label} ({err}). Falling back to local persistent storage.")
 
+        # Option 2: Local disk-persistent storage (survives server restarts)
+        if local_path:
+            import os
+            abs_path = os.path.abspath(local_path)
+            os.makedirs(abs_path, exist_ok=True)
+            try:
+                self._client = QdrantClient(path=abs_path)
+                _SHARED_QDRANT_CLIENT = self._client
+                logger.info(f"Qdrant local persistent storage initialized at '{abs_path}'. Vectors will survive server restarts.")
+                return self._client
+            except Exception as err:
+                logger.warning(f"Failed to initialize local Qdrant storage at '{abs_path}' ({err}). Falling back to in-memory.")
+
+        # Option 3: In-memory fallback (last resort — data lost on restart)
+        logger.warning("All Qdrant connection options failed. Using in-memory Qdrant (data will be lost on restart).")
+        self._client = QdrantClient(":memory:")
+        _SHARED_QDRANT_CLIENT = self._client
+        logger.info("In-memory Qdrant client initialized.")
         return self._client
 
     def health_check(self) -> bool:

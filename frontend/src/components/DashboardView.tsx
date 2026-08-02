@@ -30,7 +30,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       title: 'Total Documents',
       value: isLoading
         ? '...'
-        : (graphStats?.total_documents ?? graphStats?.total_nodes ?? 0).toLocaleString(),
+        : (graphStats?.document_count ?? graphStats?.total_documents ?? 0).toLocaleString(),
       change: '+12%',
       icon: 'description',
       color: 'text-primary',
@@ -43,11 +43,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       title: 'Graph Entities',
       value: isLoading
         ? '...'
-        : (graphStats?.total_nodes ?? 0).toLocaleString(),
+        : (graphStats?.node_count ?? graphStats?.total_nodes ?? 0).toLocaleString(),
       change: isLoading
         ? '...'
-        : typeof graphStats?.avg_degree === 'number'
-        ? `${graphStats.avg_degree.toFixed(1)} edges/node`
+        : typeof (graphStats?.average_degree ?? graphStats?.avg_degree) === 'number'
+        ? `${(graphStats?.average_degree ?? graphStats?.avg_degree ?? 0).toFixed(1)} edges/node`
         : '+8%',
       icon: 'database',
       color: 'text-secondary',
@@ -494,9 +494,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
             <div className="w-40 h-40 rounded-full border-[16px] border-primary/20 relative flex items-center justify-center">
               <div className="absolute inset-0 rounded-full border-[16px] border-t-primary border-r-secondary border-b-tertiary border-l-transparent rotate-45"></div>
               <div className="text-center">
-                <p className="text-2xl font-bold text-on-surface leading-none">42K</p>
+                <p className="text-2xl font-bold text-on-surface leading-none">
+                  {isLoading ? '...' : (graphStats?.node_count ?? graphStats?.total_nodes ?? 0).toLocaleString()}
+                </p>
                 <p className="text-[10px] text-on-surface-variant uppercase tracking-wider font-semibold mt-0.5">
-                  Total
+                  Total Nodes
                 </p>
               </div>
             </div>

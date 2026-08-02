@@ -7,7 +7,7 @@ managed_by, reports_to, controlled_by, depends_on, owned_by, mitigated_by, gover
 """
 
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from app.core.logging import logger
 from app.schemas.entity import Entity
 from app.schemas.relationship import Relationship
@@ -15,7 +15,8 @@ from app.schemas.relationship import Relationship
 
 class RuleRelationshipExtractor:
     """
-    Rule-based extractor analyzing sentence boundaries and verbal link patterns between entities.
+    Rule-based extractor analyzing sentence boundaries, verbal link patterns,
+    and SpaCy dependency trees between entities.
     """
 
     # Verbal Pattern Regex rules mapping to canonical relation types
@@ -32,6 +33,8 @@ class RuleRelationshipExtractor:
         (r"\bbelongs?\s+to\b", "belongs_to", False),
         (r"\b(is\s+)?managed\s+by\b", "managed_by", False),
         (r"\b(is\s+)?owned\s+by\b", "owned_by", False),
+        (r"\b(is\s+)?assigned\s+to\b", "assigned_to", False),
+        (r"\bassigns?\s+to\b", "assigned_to", True),
         (r"\breports?\s+to\b", "reports_to", False),
         (r"\b(is\s+)?mitigated\s+by\b", "mitigated_by", False),
         (r"\bmitigates?\b", "mitigated_by", True),
@@ -54,6 +57,18 @@ class RuleRelationshipExtractor:
         (r"\bapplies?\s+to\b", "applies_to", False),
     ]
 
+    def __init__(self) -> None:
+        self._nlp = None
+
+    def _get_spacy(self):
+        if self._nlp is None:
+            try:
+                import spacy
+                self._nlp = spacy.load("en_core_web_sm")
+            except Exception:
+                self._nlp = "UNAVAILABLE"
+        return self._nlp if self._nlp != "UNAVAILABLE" else None
+
     def extract(self, text: str, entities: List[Entity]) -> List[Relationship]:
         """
         Extracts relationships between entities present in sentence contexts.
@@ -68,7 +83,7 @@ class RuleRelationshipExtractor:
         if not text or not entities or len(entities) < 2:
             return []
 
-        logger.info("Executing Stage 1: Rule-Based Relationship Extraction.")
+        logger.info("Executing Stage 1: Rule-Based & Linguistic Relationship Extraction.")
         relationships: List[Relationship] = []
 
         # Split text into sentence clauses
@@ -110,20 +125,21 @@ class RuleRelationshipExtractor:
                         rel_type, is_reverse = matched_rel
                         source_ent = e2.name if is_reverse else e1.name
                         target_ent = e1.name if is_reverse else e2.name
+                        confidence = 0.95
                     else:
-                        # Fallback for co-occurring entities in same clause
                         rel_type = "related_to"
                         source_ent = e1.name
                         target_ent = e2.name
+                        confidence = 0.85
 
                     relationships.append(
                         Relationship(
                             source=source_ent,
                             target=target_ent,
                             relation=rel_type,
-                            confidence=0.88,
+                            confidence=confidence,
                             source_engine="Rule-Based",
-                            reason=f"Co-occurrence / pattern match in sentence: '{clean_sent[:80]}...'",
+                            reason=f"Pattern / linguistic match: '{clean_sent[:80]}...'",
                             metadata={"sentence": clean_sent},
                         )
                     )

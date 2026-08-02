@@ -6,6 +6,7 @@ Infers policy responsibilities, compliance dependencies, risk mitigations,
 and department ownerships from text and entity context.
 """
 
+import time
 from typing import List, Optional
 
 from app.core.llm_provider import BaseLLMProvider, get_llm_provider_instance
@@ -39,8 +40,12 @@ class LLMRelationshipExtractor:
 
         logger.info(f"Executing Stage 2: LLM Relationship Extraction via provider '{self.llm_provider.provider_name}'.")
 
+        # Sub-step 1: Prompt Construction
+        t_prompt = time.time()
         ent_summary = ", ".join([f"{e.name} ({e.type})" for e in entities[:25]])
         prompt_text = build_relationship_prompt(text[:8000], ent_summary)
+        prompt_ms = (time.time() - t_prompt) * 1000.0
+        logger.info(f"[PERF] [LLMRelationships] PromptConstruction: {prompt_ms:.2f} ms")
 
         try:
             sys_instruct = (
@@ -48,12 +53,19 @@ class LLMRelationshipExtractor:
                 "Output strictly a JSON object with a key 'relationships' containing a list of objects with "
                 "'source', 'target', 'relation', 'confidence', and 'reason'."
             )
+
+            # Sub-step 2: LLM Inference
+            t_infer = time.time()
             json_data = await self.llm_provider.generate_json(
                 prompt=prompt_text,
                 system_prompt=sys_instruct,
                 temperature=0.1,
             )
+            infer_ms = (time.time() - t_infer) * 1000.0
+            logger.info(f"[PERF] [LLMRelationships] ModelInference: {infer_ms:.2f} ms")
 
+            # Sub-step 3: Response Parsing & Modeling
+            t_parse = time.time()
             raw_list = json_data.get("relationships", []) if isinstance(json_data, dict) else json_data
             relationships: List[Relationship] = []
 
@@ -82,6 +94,8 @@ class LLMRelationshipExtractor:
                                 )
                             )
 
+            parse_ms = (time.time() - t_parse) * 1000.0
+            logger.info(f"[PERF] [LLMRelationships] ResponseParsing: {parse_ms:.2f} ms ({len(relationships)} rels)")
             logger.info(f"LLM Relationship Extractor extracted {len(relationships)} semantic relationships.")
             return relationships
 

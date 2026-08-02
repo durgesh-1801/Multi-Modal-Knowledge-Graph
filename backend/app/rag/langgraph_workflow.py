@@ -117,17 +117,27 @@ class GraphRAGWorkflow:
 
     def node_retrieve_vectors(self, state: RAGState) -> RAGState:
         """Node 2: Retrieves vector chunks from Qdrant."""
-        state["vector_chunks"] = self.retriever.retrieve_vectors(
+        chunks = self.retriever.retrieve_vectors(
             query=state["query"],
             top_k=state["top_k"],
             score_threshold=state["score_threshold"],
             document_id=state.get("document_id"),
         )
+        state["vector_chunks"] = chunks
+        
+        # Requirement 10 Logging
+        doc_names = list({c.metadata.get("original_filename", c.document_id) for c in chunks})
+        scores = [f"{c.score:.4f}" for c in chunks]
+        logger.info(f"[RAG RETRIEVAL LOG] Number of chunks retrieved: {len(chunks)}")
+        logger.info(f"[RAG RETRIEVAL LOG] Retrieved document names: {doc_names}")
+        logger.info(f"[RAG RETRIEVAL LOG] Similarity scores: {scores}")
         return state
 
     def node_retrieve_graph(self, state: RAGState) -> RAGState:
         """Node 3: Retrieves Knowledge Graph facts via AbstractGraphInterface."""
-        state["graph_nodes"] = self.retriever.retrieve_graph(state["query"])
+        graph_nodes = self.retriever.retrieve_graph(state["query"])
+        state["graph_nodes"] = graph_nodes
+        logger.info(f"[RAG RETRIEVAL LOG] Retrieved graph nodes count: {len(graph_nodes)}")
         return state
 
     def node_merge_context(self, state: RAGState) -> RAGState:
@@ -141,7 +151,9 @@ class GraphRAGWorkflow:
     def node_build_prompt(self, state: RAGState) -> RAGState:
         """Node 5: Assembles full LLM RAG prompt."""
         context_obj = state["context"]
-        state["prompt_text"] = self.prompt_builder.build(state["query"], context_obj)
+        prompt_text = self.prompt_builder.build(state["query"], context_obj)
+        state["prompt_text"] = prompt_text
+        logger.info(f"[RAG RETRIEVAL LOG] Prompt context length: {len(prompt_text)} characters ({len(prompt_text.split())} words)")
         return state
 
     async def node_generate_answer(self, state: RAGState) -> RAGState:

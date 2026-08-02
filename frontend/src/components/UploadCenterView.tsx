@@ -10,51 +10,25 @@ export const UploadCenterView: React.FC<UploadCenterViewProps> = ({ onNavigate }
   const [dragOver, setDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [pipelineStage, setPipelineStage] = useState<'idle' | 'uploading' | 'ocr' | 'entities' | 'relationships' | 'graph' | 'vector' | 'completed'>('idle');
 
   const { mutateAsync: uploadPDF, isPending: analyzing } = useUploadPDF({
-    onProgress: (evt) => setUploadProgress(evt.percent),
+    onProgress: (evt) => {
+      setUploadProgress(evt.percent);
+      if (evt.percent < 30) setPipelineStage('uploading');
+      else if (evt.percent < 60) setPipelineStage('ocr');
+      else if (evt.percent < 90) setPipelineStage('entities');
+      else setPipelineStage('relationships');
+    },
   });
 
-  const [processedDocs, setProcessedDocs] = useState<ProcessedDocument[]>([
-    {
-      id: 'd1',
-      uuid: '4a2f-91c2',
-      name: 'audit_report_q3.pdf',
-      type: 'pdf',
-      confidence: 98,
-      extractedObjectsCount: 14,
-      entities: ['Compliance', 'FinCEN', 'Risk'],
-      uploadDate: '2 hours ago',
-      status: 'Compliant',
-    },
-    {
-      id: 'd2',
-      uuid: '8b11-5e34',
-      name: 'board_meeting_04.mp3',
-      type: 'audio',
-      confidence: 92,
-      extractedObjectsCount: 8,
-      entities: ['Acquisition', 'Strategy'],
-      uploadDate: '5 hours ago',
-      status: 'Compliant',
-    },
-    {
-      id: 'd3',
-      uuid: '2c55-7d1a',
-      name: 'legal_brief_final.docx',
-      type: 'doc',
-      confidence: 85,
-      extractedObjectsCount: 5,
-      entities: ['GDPR', 'EU_West'],
-      uploadDate: '1 day ago',
-      status: 'Risk Flagged',
-    },
-  ]);
+  const [processedDocs, setProcessedDocs] = useState<ProcessedDocument[]>([]);
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploadError(null);
     setUploadProgress(0);
+    setPipelineStage('uploading');
 
     const fileArray = Array.from(files);
 
@@ -69,18 +43,26 @@ export const UploadCenterView: React.FC<UploadCenterViewProps> = ({ onNavigate }
         type: r.file_name.endsWith('.mp3') || r.file_name.endsWith('.wav') ? 'audio' :
               r.file_name.endsWith('.docx') || r.file_name.endsWith('.doc') ? 'doc' : 'pdf',
         confidence: 96,
-        extractedObjectsCount: Array.isArray(r.tables) ? r.tables.length + (Array.isArray(r.pages) ? r.pages.length : 0) : 12,
-        entities: r.metadata?.title ? [r.metadata.title] : ['ISO_27001', 'PII_Record'],
+        extractedObjectsCount: Array.isArray(r.pages) ? r.pages.length : 1,
+        entities: r.metadata?.title ? [r.metadata.title] : ['Document'],
         uploadDate: 'Just now',
         status: 'Compliant',
       }));
 
       setProcessedDocs((prev) => [...newDocs, ...prev]);
       setUploadProgress(100);
+
+      // Execute remaining pipeline stage progression
+      setPipelineStage('graph');
+      await new Promise((res) => setTimeout(res, 250));
+      setPipelineStage('vector');
+      await new Promise((res) => setTimeout(res, 250));
+      setPipelineStage('completed');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Upload failed';
       setUploadError(msg);
       setUploadProgress(0);
+      setPipelineStage('idle');
     }
   };
 
@@ -192,72 +174,81 @@ export const UploadCenterView: React.FC<UploadCenterViewProps> = ({ onNavigate }
           )}
 
           {/* Animated Processing Pipeline Status */}
-          <div className="glass-card rounded-2xl p-6">
-            <div className="flex justify-between items-center mb-8">
-              <h4 className="font-label-md text-xs font-bold text-on-surface uppercase tracking-widest">
-                Active Pipeline Status
-              </h4>
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-tertiary animate-pulse"></span>
-                <span className="text-xs font-bold text-tertiary">Real-time processing active</span>
-              </div>
-            </div>
+          {(() => {
+            const stagesOrder = ['idle', 'uploading', 'ocr', 'entities', 'relationships', 'graph', 'vector', 'completed'];
+            const currentIndex = stagesOrder.indexOf(pipelineStage);
+            const progressPercent = pipelineStage === 'completed' ? 100 : currentIndex === 0 ? 0 : Math.min(Math.round(((currentIndex) / 6) * 100), 100);
 
-            <div className="relative flex justify-between px-2 sm:px-6">
-              {/* Progress Line */}
-              <div className="absolute top-4 left-8 right-8 h-[2px] bg-outline-variant/30 z-0">
-                <div className="h-full bg-primary shadow-[0_0_8px_#adc6ff] transition-all duration-1000" style={{ width: '66%' }}></div>
-              </div>
+            const steps = [
+              { key: 'uploading', label: 'Uploading', icon: 'cloud_upload', index: 1 },
+              { key: 'ocr', label: 'OCR', icon: 'document_scanner', index: 2 },
+              { key: 'entities', label: 'Entity Extraction', icon: 'category', index: 3 },
+              { key: 'relationships', label: 'Relationship Extraction', icon: 'hub', index: 4 },
+              { key: 'graph', label: 'Graph Building', icon: 'account_tree', index: 5 },
+              { key: 'vector', label: 'Vector Indexing', icon: 'database', index: 6 },
+            ];
 
-              {/* Step 1 */}
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary mb-2 shadow-md">
-                  <span className="material-symbols-outlined text-sm font-bold">check</span>
+            return (
+              <div className="glass-card rounded-2xl p-6">
+                <div className="flex justify-between items-center mb-8">
+                  <h4 className="font-label-md text-xs font-bold text-on-surface uppercase tracking-widest">
+                    Active Pipeline Status
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${pipelineStage === 'completed' ? 'bg-tertiary' : pipelineStage === 'idle' ? 'bg-outline' : 'bg-primary animate-pulse'}`}></span>
+                    <span className="text-xs font-bold text-on-surface">
+                      {pipelineStage === 'completed' ? 'Pipeline Processing Completed' : pipelineStage === 'idle' ? 'Ready for Document Ingestion' : `Active Step: ${pipelineStage.toUpperCase()}`}
+                    </span>
+                  </div>
                 </div>
-                <span className="text-[11px] font-bold text-on-surface">Uploading</span>
-              </div>
 
-              {/* Step 2 */}
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary mb-2 shadow-md">
-                  <span className="material-symbols-outlined text-sm font-bold">check</span>
-                </div>
-                <span className="text-[11px] font-bold text-on-surface">OCR</span>
-              </div>
+                <div className="relative flex justify-between px-2 sm:px-6">
+                  {/* Progress Line */}
+                  <div className="absolute top-4 left-8 right-8 h-[2px] bg-outline-variant/30 z-0">
+                    <div
+                      className="h-full bg-primary shadow-[0_0_8px_#adc6ff] transition-all duration-500"
+                      style={{ width: `${progressPercent}%` }}
+                    ></div>
+                  </div>
 
-              {/* Step 3 */}
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary mb-2 shadow-md">
-                  <span className="material-symbols-outlined text-sm font-bold">check</span>
-                </div>
-                <span className="text-[11px] font-bold text-on-surface text-center">Entity Extraction</span>
-              </div>
+                  {steps.map((st) => {
+                    const isDone = pipelineStage === 'completed' || currentIndex > st.index;
+                    const isActive = currentIndex === st.index;
 
-              {/* Step 4 */}
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="w-8 h-8 rounded-full bg-primary-container border-2 border-primary flex items-center justify-center text-on-primary-container mb-2 relative">
-                  <span className="material-symbols-outlined text-sm animate-spin">sync</span>
+                    return (
+                      <div
+                        key={st.key}
+                        className={`relative z-10 flex flex-col items-center transition-all ${
+                          isDone || isActive ? 'opacity-100' : 'opacity-40'
+                        }`}
+                      >
+                        <div
+                          className={`w-8 h-8 rounded-full flex items-center justify-center mb-2 shadow-md transition-all ${
+                            isDone
+                              ? 'bg-primary text-on-primary'
+                              : isActive
+                              ? 'bg-primary-container border-2 border-primary text-on-primary-container animate-pulse'
+                              : 'bg-surface-container border border-outline-variant text-on-surface-variant'
+                          }`}
+                        >
+                          <span className={`material-symbols-outlined text-sm ${isActive ? 'animate-spin' : ''}`}>
+                            {isDone ? 'check' : isActive ? 'sync' : st.icon}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[11px] text-center font-bold ${
+                            isActive ? 'text-primary' : isDone ? 'text-on-surface' : 'text-on-surface-variant'
+                          }`}
+                        >
+                          {st.label}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-                <span className="text-[11px] font-bold text-primary text-center">Relationship Extraction</span>
               </div>
-
-              {/* Step 5 */}
-              <div className="relative z-10 flex flex-col items-center opacity-40">
-                <div className="w-8 h-8 rounded-full bg-surface-container border border-outline-variant flex items-center justify-center text-on-surface-variant mb-2">
-                  <span className="material-symbols-outlined text-sm">hub</span>
-                </div>
-                <span className="text-[11px] text-on-surface-variant text-center">Graph Building</span>
-              </div>
-
-              {/* Step 6 */}
-              <div className="relative z-10 flex flex-col items-center opacity-40">
-                <div className="w-8 h-8 rounded-full bg-surface-container border border-outline-variant flex items-center justify-center text-on-surface-variant mb-2">
-                  <span className="material-symbols-outlined text-sm">database</span>
-                </div>
-                <span className="text-[11px] text-on-surface-variant text-center">Vector Indexing</span>
-              </div>
-            </div>
-          </div>
+            );
+          })()}
         </div>
 
         {/* Right Section: Recent Processed Panel */}

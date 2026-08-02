@@ -43,8 +43,9 @@ class Settings(BASE_CLASS):
     PORT: int = 8000
 
     # LLM Provider Integration
-    LLM_PROVIDER: str = "groq"
+    LLM_PROVIDER: str = "gemini"
     GROQ_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
 
     # Knowledge Graph Database Integration (Neo4j)
     NEO4J_URI: str = "bolt://localhost:7687"
@@ -58,6 +59,7 @@ class Settings(BASE_CLASS):
     QDRANT_PORT: Optional[int] = None
     QDRANT_URL: Optional[str] = None
     QDRANT_API_KEY: Optional[str] = None
+    QDRANT_LOCAL_PATH: Optional[str] = "./qdrant_storage"
     QDRANT_COLLECTION: str = "knowledge_graph"
     QDRANT_COLLECTION_NAME: Optional[str] = None
 
@@ -89,7 +91,8 @@ class Settings(BASE_CLASS):
     @model_validator(mode="after")
     def populate_defaults_and_fallbacks(self) -> "Settings":
         """Ensures dual-named variables and computed defaults are populated."""
-        if not self.QDRANT_URL and self.QDRANT_HOST and not self.QDRANT_API_KEY:
+        # Only auto-build QDRANT_URL from host when not using local path mode
+        if not self.QDRANT_URL and not self.QDRANT_LOCAL_PATH and self.QDRANT_HOST and not self.QDRANT_API_KEY:
             port_str = f":{self.QDRANT_PORT}" if self.QDRANT_PORT else ""
             self.QDRANT_URL = f"http://{self.QDRANT_HOST}{port_str}"
         if not self.QDRANT_COLLECTION_NAME:

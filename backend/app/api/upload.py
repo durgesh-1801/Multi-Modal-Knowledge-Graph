@@ -77,7 +77,7 @@ async def upload_pdf(
 
     for file in files:
         original_filename = file.filename or "uploaded_document.pdf"
-        logger.info(f"Processing upload request for file: '{original_filename}'")
+        logger.info(f"Received file '{original_filename}'")
         saved_path = None
 
         try:
@@ -98,6 +98,9 @@ async def upload_pdf(
             # 2. Generate unique storage filename and persist to disk
             unique_filename = file_manager.generate_unique_filename(original_filename)
             saved_path = file_manager.save_file(binary_content, unique_filename)
+            logger.info(f"Saved file '{original_filename}' as '{unique_filename}' at {saved_path}")
+
+            logger.info(f"Pipeline started for '{original_filename}' ({unique_filename})")
 
             # 3. Parse Metadata and Page Text
             metadata, pages = pdf_parser.parse_bytes(binary_content)
@@ -168,6 +171,8 @@ async def upload_pdf(
                     )
                 except Exception as graph_err:
                     logger.error(f"Graph construction warning for '{unique_filename}': {graph_err}", exc_info=True)
+
+            logger.info(f"Pipeline completed for '{original_filename}' ({unique_filename})")
 
             # 9. Assemble structured response payload
             processed_data = PDFProcessedData(

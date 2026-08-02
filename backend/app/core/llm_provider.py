@@ -293,6 +293,118 @@ class GroqProvider(BaseLLMProvider):
             return {}
 
 
+class GeminiProvider(BaseLLMProvider):
+    """
+    Google Gemini LLM Provider Adapter using Google Generative Language REST API.
+    """
+
+    def __init__(self, api_key: Optional[str] = None, default_model: Optional[str] = None) -> None:
+        self.api_key: str = api_key or getattr(settings, "GEMINI_API_KEY", None) or settings.GROQ_API_KEY or ""
+        self._default_model: str = default_model or settings.LLM_MODEL or "gemini-2.5-flash"
+        if "llama" in self._default_model.lower():
+            self._default_model = "gemini-2.5-flash"
+
+        if self.api_key and not self.api_key.startswith("YOUR_"):
+            logger.info(f"Initialized GeminiProvider with model '{self._default_model}'")
+        else:
+            logger.warning("Gemini API key is unconfigured or set to placeholder.")
+
+    @property
+    def provider_name(self) -> str:
+        return "gemini"
+
+    @property
+    def active_model(self) -> str:
+        return self._default_model
+
+    async def generate(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+        model: Optional[str] = None,
+    ) -> LLMResponse:
+        import httpx
+
+        target_model = model or self._default_model
+        if "llama" in target_model.lower():
+            target_model = "gemini-2.5-flash"
+
+        start_t = time.time()
+        if not self.api_key or self.api_key.startswith("YOUR_"):
+            return LLMResponse(text="", model=target_model, provider=self.provider_name, latency_ms=0.0)
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={self.api_key}"
+        contents = []
+        if system_prompt:
+            contents.append({"role": "user", "parts": [{"text": f"System Instruction: {system_prompt}"}]})
+            contents.append({"role": "model", "parts": [{"text": "Understood. I will follow instructions."}]})
+        contents.append({"role": "user", "parts": [{"text": prompt}]})
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as client:
+                res = await client.post(url, json=payload)
+                res.raise_for_status()
+                data = res.json()
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+                elapsed_ms = (time.time() - start_t) * 1000.0
+                return LLMResponse(
+                    text=text.strip(),
+                    model=target_model,
+                    provider=self.provider_name,
+                    latency_ms=round(elapsed_ms, 2),
+                    raw_response=data,
+                )
+        except Exception as err:
+            logger.error(f"Gemini API generation error: {err}")
+            elapsed_ms = (time.time() - start_t) * 1000.0
+            return LLMResponse(text="", model=target_model, provider=self.provider_name, latency_ms=round(elapsed_ms, 2))
+
+    async def generate_json(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+        model: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        sys_instruct = (system_prompt or "") + "\nReturn strictly valid JSON format."
+        resp = await self.generate(prompt=prompt, system_prompt=sys_instruct, temperature=temperature, max_tokens=max_tokens, model=model)
+        return GroqProvider._clean_and_parse_json(resp.text)
+
+    async def stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        temperature: float = 0.1,
+        max_tokens: int = 4096,
+        model: Optional[str] = None,
+    ) -> AsyncGenerator[str, None]:
+        resp = await self.generate(prompt=prompt, system_prompt=system_prompt, temperature=temperature, max_tokens=max_tokens, model=model)
+        if resp.text:
+            yield resp.text
+        else:
+            yield "LLM Provider Error or API key unconfigured."
+
+    async def health_check(self) -> Dict[str, Any]:
+        resp = await self.generate(prompt="Respond with ok", max_tokens=5, temperature=0.0)
+        return {
+            "provider": self.provider_name,
+            "model": self.active_model,
+            "status": "connected" if resp.text else "error",
+            "latency_ms": resp.latency_ms,
+        }
+
+
 # ─── Singleton Factory ─────────────────────────────────────────────────────────
 _LLM_PROVIDER_INSTANCE: Optional[BaseLLMProvider] = None
 
@@ -304,10 +416,11 @@ def get_llm_provider_instance() -> BaseLLMProvider:
     """
     global _LLM_PROVIDER_INSTANCE
     if _LLM_PROVIDER_INSTANCE is None:
-        provider_type = (settings.LLM_PROVIDER or "groq").lower()
-        if provider_type == "groq":
+        provider_type = (settings.LLM_PROVIDER or "gemini").lower()
+        if provider_type == "gemini" or getattr(settings, "GEMINI_API_KEY", None):
+            _LLM_PROVIDER_INSTANCE = GeminiProvider()
+        elif provider_type == "groq":
             _LLM_PROVIDER_INSTANCE = GroqProvider()
         else:
-            logger.warning(f"Unknown LLM provider '{provider_type}'. Defaulting to GroqProvider.")
-            _LLM_PROVIDER_INSTANCE = GroqProvider()
+            _LLM_PROVIDER_INSTANCE = GeminiProvider()
     return _LLM_PROVIDER_INSTANCE

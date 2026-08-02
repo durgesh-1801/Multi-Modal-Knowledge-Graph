@@ -1,5 +1,5 @@
-import React from 'react';
-import { NavigationTab } from '../types';
+import React, { useRef, useState, useEffect } from 'react';
+import { NavigationTab, Role, User } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
@@ -8,7 +8,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
-  const { user, activeRole, canAccessTab } = useAuth();
+  const { user, activeRole, canAccessTab, logout } = useAuth();
 
   // Role-tailored navigation items matrix
   const getNavItems = () => {
@@ -107,18 +107,138 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onSelectTab }) => {
           </button>
         )}
 
-        <div className="flex items-center gap-2.5 p-2 rounded-xl bg-slate-50 border border-slate-200">
-          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-xs">
-            {(user?.name || user?.email || 'U').split(' ').map((n) => n[0]).join('')}
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-label-md text-xs font-bold text-slate-900 truncate">{user?.name ?? 'User'}</span>
-            <span className="text-[9px] text-blue-700 font-bold uppercase tracking-wider bg-blue-50 px-1.5 py-0.5 rounded w-fit border border-blue-200 mt-0.5">
-              {(activeRole || 'ADMIN').replace('_', ' ')}
-            </span>
-          </div>
-        </div>
+        <UserProfileCard user={user} activeRole={activeRole} />
       </div>
     </aside>
+  );
+};
+
+// ─── Role styling maps ─────────────────────────────────────────────────────────
+const ROLE_BADGE: Record<Role, string> = {
+  ADMIN: 'bg-blue-50 text-blue-700 border-blue-200',
+  COMPLIANCE_OFFICER: 'bg-purple-50 text-purple-700 border-purple-200',
+  AUDITOR: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+};
+const AVATAR_BG: Record<Role, string> = {
+  ADMIN: 'bg-blue-600',
+  COMPLIANCE_OFFICER: 'bg-purple-600',
+  AUDITOR: 'bg-emerald-600',
+};
+
+// ─── User Profile Card with Sign-Out Dropdown ──────────────────────────────────
+interface UserProfileCardProps {
+  user: User | null;
+  activeRole: Role;
+}
+
+const UserProfileCard: React.FC<UserProfileCardProps> = ({ user, activeRole }) => {
+  const { logout } = useAuth();
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const onOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    if (open) document.addEventListener('mousedown', onOutside);
+    return () => document.removeEventListener('mousedown', onOutside);
+  }, [open]);
+
+  const initials = (user?.name || user?.email || 'U')
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  const roleLabel = (activeRole || 'ADMIN').replace('_', ' ');
+  const avatarBg = AVATAR_BG[activeRole] ?? 'bg-blue-600';
+  const badgeCls = ROLE_BADGE[activeRole] ?? ROLE_BADGE['ADMIN'];
+
+  return (
+    <div ref={wrapperRef} className="relative">
+
+      {/* ── Dropdown Panel (opens above the card) ───────────────────────────── */}
+      {open && (
+        <div
+          className="absolute bottom-full mb-2 left-0 right-0 bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden z-[60]"
+          style={{ animation: 'fadeSlideUp 0.15s ease-out' }}
+        >
+          {/* User info header */}
+          <div className="px-4 py-3.5 bg-gradient-to-br from-slate-50 to-blue-50/40 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-full ${avatarBg} flex items-center justify-center text-white font-bold text-sm shadow-sm flex-shrink-0`}>
+                {initials}
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-bold text-slate-900 truncate leading-tight">{user?.name ?? 'User'}</p>
+                <p className="text-[11px] text-slate-500 truncate mt-0.5">{user?.email ?? ''}</p>
+                <span className={`inline-block text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border mt-1.5 ${badgeCls}`}>
+                  {roleLabel}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Sign Out button */}
+          <button
+            id="sidebar-signout-btn"
+            onClick={() => { setOpen(false); logout(); }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold text-red-600 hover:bg-red-50 active:bg-red-100 transition-colors cursor-pointer group"
+          >
+            <span className="material-symbols-outlined text-lg text-red-500 group-hover:scale-110 transition-transform">
+              logout
+            </span>
+            Sign out
+            <span className="ml-auto text-[10px] text-slate-400 font-normal">Change profile</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Profile Card Trigger ─────────────────────────────────────────────── */}
+      <button
+        id="sidebar-profile-btn"
+        onClick={() => setOpen((v) => !v)}
+        title="Account options"
+        className={`w-full flex items-center gap-2.5 p-2 rounded-xl border transition-all duration-150 cursor-pointer text-left ${
+          open
+            ? 'bg-blue-50 border-blue-200 shadow-sm'
+            : 'bg-slate-50 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+        }`}
+      >
+        {/* Avatar */}
+        <div className={`w-8 h-8 rounded-full ${avatarBg} flex items-center justify-center text-white font-bold text-xs shadow-xs flex-shrink-0`}>
+          {initials}
+        </div>
+
+        {/* Name + role */}
+        <div className="flex flex-col min-w-0 flex-1">
+          <span className="font-label-md text-xs font-bold text-slate-900 truncate leading-tight">
+            {user?.name ?? 'User'}
+          </span>
+          <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded w-fit border mt-0.5 ${badgeCls}`}>
+            {roleLabel}
+          </span>
+        </div>
+
+        {/* Chevron */}
+        <span
+          className={`material-symbols-outlined text-base text-slate-400 flex-shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+        >
+          expand_less
+        </span>
+      </button>
+
+      {/* Inline keyframe for the dropdown */}
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
   );
 };

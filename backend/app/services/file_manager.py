@@ -132,37 +132,46 @@ class FileManager:
                 detail=f"File '{filename}' is not a valid or well-formed PDF document.",
             )
 
-        # 6. Corruption & Password Protection Check via PyMuPDF
-        try:
-            doc = fitz.open(stream=content, filetype="pdf")
-            if doc.is_encrypted:
-                # Attempt to authenticate with empty password
-                if not doc.authenticate(""):
+        # 6. Corruption & Password Protection Check
+        if fitz is not None:
+            try:
+                doc = fitz.open(stream=content, filetype="pdf")
+                if doc.is_encrypted:
+                    # Attempt to authenticate with empty password
+                    if not doc.authenticate(""):
+                        doc.close()
+                        logger.warning(
+                            f"Validation failed: '{filename}' is password-protected."
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"PDF document '{filename}' is password-protected.",
+                        )
+                
+                if doc.page_count < 1:
                     doc.close()
-                    logger.warning(
-                        f"Validation failed: '{filename}' is password-protected."
-                    )
+                    logger.warning(f"Validation failed: '{filename}' has 0 pages.")
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"PDF document '{filename}' is password-protected.",
+                        detail=f"PDF document '{filename}' contains no readable pages.",
                     )
-            
-            if doc.page_count < 1:
                 doc.close()
-                logger.warning(f"Validation failed: '{filename}' has 0 pages.")
+            except HTTPException:
+                raise
+            except Exception as err:
+                logger.error(f"Validation failed: Unable to open PDF '{filename}'. Error: {err}")
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"PDF document '{filename}' contains no readable pages.",
+                    detail=f"PDF document '{filename}' is corrupted or unreadable.",
                 )
-            doc.close()
-        except HTTPException:
-            raise
-        except Exception as err:
-            logger.error(f"Validation failed: Unable to open PDF '{filename}'. Error: {err}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"PDF document '{filename}' is corrupted or unreadable.",
-            )
+        else:
+            # Fallback validation when PyMuPDF is not installed
+            if b"%%EOF" not in content[-2048:]:
+                logger.warning(f"Validation failed (fallback): '{filename}' missing EOF marker.")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"PDF document '{filename}' is corrupted or incomplete.",
+                )
 
         logger.info(f"PDF validation successful for file: '{filename}' ({len(content)} bytes)")
         return content

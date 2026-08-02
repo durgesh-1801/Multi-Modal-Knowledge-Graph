@@ -30,18 +30,21 @@ export interface User {
 }
 
 export interface ProjectMember {
-  user_id: string;
-  user_name?: string;
-  user_email?: string;
-  role: Role;
+  id?: string;
+  user_id?: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 export interface Project {
   id: string;
   name: string;
   description: string;
-  owner_id: string;
+  frameworks?: string[];
+  owner?: string;
   members: ProjectMember[];
+  roles?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -120,8 +123,14 @@ export interface GraphStatistics {
   node_type_distribution: Record<string, number>;
   avg_degree: number;
   graph_density: number;
-  most_connected_entities: Array<{ name: string; degree: number }>;
-  total_documents?: number;
+  most_connected_entities: Array<{ name?: string; label?: string; degree?: number }>;
+  total_documents: number;
+  node_count?: number;
+  relationship_count?: number;
+  document_count?: number;
+  average_degree?: number;
+  entity_types?: Record<string, number>;
+  relationship_types?: Record<string, number>;
 }
 
 /** Matches backend SubgraphResponse schema */

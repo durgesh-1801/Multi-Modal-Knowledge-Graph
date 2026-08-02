@@ -56,31 +56,47 @@ class UserResponse(UserBase):
 # Project Management Schemas
 # -----------------------------------------------------------------------------
 class ProjectMember(BaseModel):
-    user_id: str = Field(..., description="Target user ID.")
-    user_name: Optional[str] = Field(None, description="Member name.")
-    user_email: Optional[str] = Field(None, description="Member email.")
-    role: Role = Field(..., description="Project-assigned role.")
+    id: Optional[str] = Field(None, description="Unique member identifier.")
+    user_id: Optional[str] = Field(None, description="Target user ID if linked.")
+    name: str = Field(..., description="Full member display name.")
+    email: str = Field(..., description="Member email address.")
+    role: str = Field(default="Viewer", description="Assigned team role.")
+
+
+class ProjectMemberCreate(BaseModel):
+    name: str = Field(..., min_length=2, description="Member name.")
+    email: str = Field(..., description="Member email.")
+    role: str = Field(default="Viewer", description="Assigned team role.")
+
+
+class ProjectMemberUpdate(BaseModel):
+    role: str = Field(..., description="Updated team role.")
 
 
 class ProjectBase(BaseModel):
     name: str = Field(..., min_length=2, description="Project name.")
     description: Optional[str] = Field("", description="Project scope and details.")
+    frameworks: List[str] = Field(default_factory=list, description="Selected compliance frameworks.")
 
 
 class ProjectCreate(ProjectBase):
-    members: Optional[List[ProjectMember]] = Field(default_factory=list, description="Initial project members.")
+    members: List[ProjectMember] = Field(default_factory=list, description="Initial project team members.")
+    owner: Optional[str] = Field(None, description="Project owner name or email.")
 
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2)
     description: Optional[str] = Field(None)
+    frameworks: Optional[List[str]] = Field(None)
     members: Optional[List[ProjectMember]] = Field(None)
+    owner: Optional[str] = Field(None)
 
 
 class ProjectResponse(ProjectBase):
     id: str = Field(..., description="Unique project ID.")
-    owner_id: str = Field(..., description="User ID of the project owner.")
+    owner: str = Field(..., description="Project owner display info.")
     members: List[ProjectMember] = Field(default_factory=list, description="Assigned project members.")
+    roles: List[str] = Field(default_factory=list, description="Distinct assigned team roles.")
     created_at: str = Field(..., description="Project creation ISO timestamp.")
     updated_at: str = Field(..., description="Project last modified ISO timestamp.")
 

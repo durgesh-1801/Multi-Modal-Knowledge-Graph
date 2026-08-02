@@ -115,6 +115,22 @@ class PDFParser:
         """
         pages: List[PDFPage] = []
         total_chars = 0
+
+        if fitz is None:
+            logger.warning("PyMuPDF (fitz) is not installed. Attempting pdfplumber fallback.")
+            fallback_pages = self._extract_pdfplumber_fallback(content=content)
+            fallback_text = " ".join([p.text for p in fallback_pages])
+            metadata = PDFMetadata(
+                title="",
+                author="",
+                page_count=len(fallback_pages),
+                creation_date=None,
+                modification_date=None,
+                producer="Fallback Parser",
+                format="PDF",
+            )
+            return metadata, fallback_pages, len(fallback_text)
+
         doc = fitz.open(stream=content, filetype="pdf")
 
         raw_meta: Dict[str, str] = doc.metadata or {}

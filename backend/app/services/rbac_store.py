@@ -99,12 +99,14 @@ class RBACStore:
             "id": demo_project_id,
             "name": "HIPAA & GDPR Compliance Automation",
             "description": "Multi-modal Knowledge Graph automated auditing & compliance engine.",
-            "owner_id": "usr_admin_001",
+            "frameworks": ["HIPAA", "GDPR", "ISO 27001"],
+            "owner": "Sarah Jenkins (admin@enterprise.com)",
             "members": [
-                {"user_id": "usr_admin_001", "user_name": "Sarah Jenkins", "user_email": "admin@enterprise.com", "role": Role.ADMIN.value},
-                {"user_id": "usr_officer_002", "user_name": "David Ross", "user_email": "officer@enterprise.com", "role": Role.COMPLIANCE_OFFICER.value},
-                {"user_id": "usr_auditor_003", "user_name": "Elena Rostova", "user_email": "auditor@enterprise.com", "role": Role.AUDITOR.value},
+                {"id": "mem_01", "user_id": "usr_admin_001", "name": "Sarah Jenkins", "email": "admin@enterprise.com", "role": "Admin"},
+                {"id": "mem_02", "user_id": "usr_officer_002", "name": "David Ross", "email": "officer@enterprise.com", "role": "Compliance Officer"},
+                {"id": "mem_03", "user_id": "usr_auditor_003", "name": "Elena Rostova", "email": "auditor@enterprise.com", "role": "Auditor"},
             ],
+            "roles": ["Admin", "Compliance Officer", "Auditor"],
             "created_at": now,
             "updated_at": now,
         }
@@ -200,56 +202,139 @@ class RBACStore:
     # -------------------------------------------------------------------------
     # PROJECT OPERATIONS
     # -------------------------------------------------------------------------
+    def _format_project(self, p: dict) -> ProjectResponse:
+        members_data = p.get("members", [])
+        formatted_members = []
+        roles_set = set()
+        for m in members_data:
+            mem_id = m.get("id") or f"mem_{uuid.uuid4().hex[:6]}"
+            mem_name = m.get("name") or m.get("user_name") or "Team Member"
+            mem_email = m.get("email") or m.get("user_email") or ""
+            mem_role = m.get("role") or "Viewer"
+            roles_set.add(mem_role)
+            formatted_members.append(
+                ProjectMember(
+                    id=mem_id,
+                    user_id=m.get("user_id"),
+                    name=mem_name,
+                    email=mem_email,
+                    role=mem_role,
+                )
+            )
+
+        return ProjectResponse(
+            id=p["id"],
+            name=p["name"],
+            description=p.get("description", ""),
+            frameworks=p.get("frameworks", []),
+            owner=p.get("owner") or "Sarah Jenkins (Admin)",
+            members=formatted_members,
+            roles=sorted(list(roles_set)),
+            created_at=p.get("created_at", datetime.now(timezone.utc).isoformat()),
+            updated_at=p.get("updated_at", datetime.now(timezone.utc).isoformat()),
+        )
+
     def get_all_projects(self) -> List[ProjectResponse]:
         with self._lock:
-            return [ProjectResponse(**p) for p in self._projects.values()]
+            return [self._format_project(p) for p in self._projects.values()]
 
     def get_project_by_id(self, project_id: str) -> Optional[ProjectResponse]:
         with self._lock:
             p = self._projects.get(project_id)
-            return ProjectResponse(**p) if p else None
+            return self._format_project(p) if p else None
 
     def create_project(self, payload: ProjectCreate, owner_id: str) -> ProjectResponse:
         with self._lock:
+            # 1. Validation: Project Name required
+            if not payload.name or not payload.name.strip():
+                raise ValueError("Project Name is required.")
+
+            # 2. Validation: Team Members required
+            members_raw = [m.model_dump() for m in (payload.members or [])]
+            if not members_raw:
+                raise ValueError("At least one team member is required.")
+
+            # 3. Validation: Duplicate email check
+            emails = [m["email"].strip().lower() for m in members_raw if m.get("email")]
+            if len(emails) != len(set(emails)):
+                raise ValueError("Duplicate member emails are not allowed within a project.")
+
+            # 4. Validation: Owner / Admin role check
+            has_admin = any(m.get("role", "").lower() == "admin" for m in members_raw)
+            if not has_admin:
+                raise ValueError("Project must contain at least one member with the 'Admin' role.")
+
+            # Format members with IDs
+            processed_members = []
+            for m in members_raw:
+                processed_members.append({
+                    "id": m.get("id") or f"mem_{uuid.uuid4().hex[:6]}",
+                    "user_id": m.get("user_id"),
+                    "name": m.get("name", "Team Member"),
+                    "email": m.get("email", ""),
+                    "role": m.get("role", "Viewer"),
+                })
+
+            owner_member = next((m for m in processed_members if m["role"].lower() == "admin"), processed_members[0])
+            owner_info = f"{owner_member['name']} ({owner_member['email']})"
+
             project_id = f"proj_{uuid.uuid4().hex[:8]}"
             now = datetime.now(timezone.utc).isoformat()
-            members_list = [m.model_dump() for m in (payload.members or [])]
-            
-            # Ensure owner is in members list
-            owner_user = self._users.get(owner_id)
-            if owner_user and not any(m["user_id"] == owner_id for m in members_list):
-                members_list.append({
-                    "user_id": owner_id,
-                    "user_name": owner_user["name"],
-                    "user_email": owner_user["email"],
-                    "role": owner_user["role"],
-                })
 
             proj_dict = {
                 "id": project_id,
-                "name": payload.name,
+                "name": payload.name.strip(),
                 "description": payload.description or "",
-                "owner_id": owner_id,
-                "members": members_list,
+                "frameworks": payload.frameworks or [],
+                "owner": payload.owner or owner_info,
+                "members": processed_members,
                 "created_at": now,
                 "updated_at": now,
             }
+
             self._projects[project_id] = proj_dict
-            return ProjectResponse(**proj_dict)
+            return self._format_project(proj_dict)
 
     def update_project(self, project_id: str, payload: ProjectUpdate) -> ProjectResponse:
         with self._lock:
             if project_id not in self._projects:
                 raise KeyError(f"Project '{project_id}' not found.")
             p = self._projects[project_id]
+
             if payload.name is not None:
-                p["name"] = payload.name
+                if not payload.name.strip():
+                    raise ValueError("Project Name cannot be empty.")
+                p["name"] = payload.name.strip()
             if payload.description is not None:
                 p["description"] = payload.description
+            if payload.frameworks is not None:
+                p["frameworks"] = payload.frameworks
+            if payload.owner is not None:
+                p["owner"] = payload.owner
             if payload.members is not None:
-                p["members"] = [m.model_dump() for m in payload.members]
+                members_raw = [m.model_dump() for m in payload.members]
+                if not members_raw:
+                    raise ValueError("At least one team member is required.")
+                emails = [m["email"].strip().lower() for m in members_raw if m.get("email")]
+                if len(emails) != len(set(emails)):
+                    raise ValueError("Duplicate member emails are not allowed within a project.")
+                has_admin = any(m.get("role", "").lower() == "admin" for m in members_raw)
+                if not has_admin:
+                    raise ValueError("Project must contain at least one member with the 'Admin' role.")
+                
+                p["members"] = [
+                    {
+                        "id": m.get("id") or f"mem_{uuid.uuid4().hex[:6]}",
+                        "user_id": m.get("user_id"),
+                        "name": m.get("name", "Team Member"),
+                        "email": m.get("email", ""),
+                        "role": m.get("role", "Viewer"),
+                    }
+                    for m in members_raw
+                ]
+
             p["updated_at"] = datetime.now(timezone.utc).isoformat()
-            return ProjectResponse(**p)
+            return self._format_project(p)
 
     def delete_project(self, project_id: str) -> bool:
         with self._lock:
@@ -257,6 +342,76 @@ class RBACStore:
                 del self._projects[project_id]
                 return True
             return False
+
+    def add_project_member(self, project_id: str, member: ProjectMemberCreate) -> ProjectResponse:
+        with self._lock:
+            if project_id not in self._projects:
+                raise KeyError(f"Project '{project_id}' not found.")
+            p = self._projects[project_id]
+            members = p.get("members", [])
+
+            # Check duplicate email
+            if any(m.get("email", "").strip().lower() == member.email.strip().lower() for m in members):
+                raise ValueError(f"Member with email '{member.email}' already exists in this project.")
+
+            new_mem = {
+                "id": f"mem_{uuid.uuid4().hex[:6]}",
+                "name": member.name.strip(),
+                "email": member.email.strip(),
+                "role": member.role,
+            }
+            members.append(new_mem)
+            p["members"] = members
+            p["updated_at"] = datetime.now(timezone.utc).isoformat()
+            return self._format_project(p)
+
+    def remove_project_member(self, project_id: str, member_id: str) -> ProjectResponse:
+        with self._lock:
+            if project_id not in self._projects:
+                raise KeyError(f"Project '{project_id}' not found.")
+            p = self._projects[project_id]
+            members = p.get("members", [])
+
+            if len(members) <= 1:
+                raise ValueError("Cannot remove member. A project must contain at least one member.")
+
+            # Filter out member
+            updated_members = [m for m in members if m.get("id") != member_id and m.get("email") != member_id]
+            
+            # Ensure Admin role remains
+            has_admin = any(m.get("role", "").lower() == "admin" for m in updated_members)
+            if not has_admin:
+                raise ValueError("Cannot remove member. Project must contain at least one Admin member.")
+
+            p["members"] = updated_members
+            p["updated_at"] = datetime.now(timezone.utc).isoformat()
+            return self._format_project(p)
+
+    def update_project_member(self, project_id: str, member_id: str, new_role: str) -> ProjectResponse:
+        with self._lock:
+            if project_id not in self._projects:
+                raise KeyError(f"Project '{project_id}' not found.")
+            p = self._projects[project_id]
+            members = p.get("members", [])
+
+            found = False
+            for m in members:
+                if m.get("id") == member_id or m.get("email") == member_id:
+                    m["role"] = new_role
+                    found = True
+                    break
+
+            if not found:
+                raise KeyError(f"Member '{member_id}' not found in project.")
+
+            # Ensure at least one Admin remains
+            has_admin = any(m.get("role", "").lower() == "admin" for m in members)
+            if not has_admin:
+                raise ValueError("Project must contain at least one Admin member.")
+
+            p["members"] = members
+            p["updated_at"] = datetime.now(timezone.utc).isoformat()
+            return self._format_project(p)
 
     # -------------------------------------------------------------------------
     # SETTINGS & AUDIT LOGS

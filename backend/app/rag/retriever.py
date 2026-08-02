@@ -16,6 +16,9 @@ from app.services.embedding_service import EmbeddingService
 from app.vector.vector_store import VectorStoreService
 
 
+from app.dependencies import get_graph_interface
+
+
 class Retriever:
     """
     RAG Retriever orchestrating dense vector search, graph node traversal, rank fusion reranking, and context merging.
@@ -30,7 +33,7 @@ class Retriever:
     ) -> None:
         self.embedder: EmbeddingService = EmbeddingService()
         self.vector_store: VectorStoreService = VectorStoreService()
-        self.graph_db: AbstractGraphInterface = graph_db or MockGraphInterface()
+        self.graph_db: AbstractGraphInterface = graph_db if graph_db is not None else get_graph_interface()
 
         # Configurable Rank Fusion weights
         self.w_vector: float = w_vector if w_vector is not None else settings.RAG_WEIGHT_VECTOR

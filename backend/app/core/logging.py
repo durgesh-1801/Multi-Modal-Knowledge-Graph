@@ -15,6 +15,11 @@ except ImportError:
     HAS_LOGURU = False
     logger = logging.getLogger("app")
     if not logger.handlers:
+        if hasattr(sys.stdout, "reconfigure"):
+            try:
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            except Exception:
+                pass
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(logging.Formatter("[%(levelname)s] %(asctime)s - %(message)s"))
         logger.addHandler(handler)

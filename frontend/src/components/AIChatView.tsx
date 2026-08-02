@@ -99,19 +99,23 @@ export const AIChatView: React.FC<AIChatViewProps> = ({ onNavigate }) => {
       const aiMsg: ChatMessage = {
         id: `ai-${Date.now()}`,
         sender: 'ai',
-        // Backend field: answer (not text)
+        // Backend field: answer
         text: data.answer || 'Analysis completed.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        confidence: Math.round((data.confidence || 0.95) * 100),
-        // Backend field: source_chunks (not sourceContext)
-        sources: data.source_chunks?.map((c) => c.source) || data.citations || [],
-        // Backend field: graph_nodes (not nodes)
-        nodes: data.graph_nodes || [],
-        citations: data.citations || [],
-        processingTime: data.processing_time_ms,
+        // Backend returns confidence as 0-1 float, convert to percentage
+        confidence: data.confidence != null ? Math.round(data.confidence * 100) : undefined,
+        // Backend citations are objects — extract the document name as the source string
+        sources: data.citations?.map((c) => c.document).filter(Boolean) ?? [],
+        // Backend field: related_entities (not graph_nodes)
+        nodes: data.related_entities ?? [],
+        // Format citation label as "Document (p.N)" for display
+        citations: data.citations?.map((c) => `${c.document}${c.page > 1 ? ` (p.${c.page})` : ''}`) ?? [],
+        // Backend returns processing_time in seconds — convert to ms
+        processingTime: data.processing_time != null ? Math.round(data.processing_time * 1000) : undefined,
       };
 
       setMessages((prev) => [...prev, aiMsg]);
+
     } catch (error) {
       setMessages((prev) => [
         ...prev,

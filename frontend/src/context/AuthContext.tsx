@@ -86,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await apiClient.get<{ success: boolean; data: UserProfileResponse }>('/auth/me', {
         headers: { Authorization: `Bearer ${tok}` },
+        timeout: 3000,
       });
       if (res.data?.data?.permissions) {
         setPermissions(res.data.data.permissions);

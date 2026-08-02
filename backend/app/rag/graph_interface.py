@@ -60,8 +60,18 @@ class AbstractGraphInterface(ABC):
         pass
 
     @abstractmethod
+    def create_nodes_batch(self, nodes: List[GraphNode]) -> List[GraphNode]:
+        """Batch creates or merges a list of entity nodes in the graph."""
+        pass
+
+    @abstractmethod
     def create_relationship(self, relationship: GraphRelationship) -> GraphRelationship:
         """Creates or merges a directed relationship edge between two nodes."""
+        pass
+
+    @abstractmethod
+    def create_relationships_batch(self, relationships: List[GraphRelationship]) -> List[GraphRelationship]:
+        """Batch creates or merges a list of directed relationship edges."""
         pass
 
     @abstractmethod
@@ -72,6 +82,11 @@ class AbstractGraphInterface(ABC):
     @abstractmethod
     def delete_document_graph(self, document_id: str) -> Dict[str, int]:
         """Deletes edges and orphaned nodes associated with a document ID."""
+        pass
+
+    @abstractmethod
+    def clear_all(self) -> Dict[str, int]:
+        """Wipes all nodes and relationships from the graph database."""
         pass
 
     @abstractmethod
@@ -88,73 +103,6 @@ class MockGraphInterface(AbstractGraphInterface):
     def __init__(self) -> None:
         self._nodes: Dict[str, GraphNode] = {}
         self._edges: List[GraphRelationship] = []
-
-        # Seed initial compliance mock data
-        initial_nodes = [
-            GraphNode(
-                id="iso_27001",
-                name="ISO 27001",
-                type="Standard",
-                aliases=["ISO/IEC 27001"],
-                source_documents=["doc_iso_001"],
-                page_numbers=[1, 5],
-                confidence=0.98,
-                properties={"description": "International Information Security Standard"},
-            ),
-            GraphNode(
-                id="access_control_policy",
-                name="Access Control Policy",
-                type="Policy",
-                aliases=["ACP"],
-                source_documents=["doc_iso_001"],
-                page_numbers=[8],
-                confidence=0.95,
-                properties={"implemented_by": "IT Department"},
-            ),
-            GraphNode(
-                id="gdpr",
-                name="GDPR",
-                type="Regulation",
-                aliases=["General Data Protection Regulation"],
-                source_documents=["doc_gdpr_002"],
-                page_numbers=[1, 12],
-                confidence=0.99,
-                properties={"jurisdiction": "EU"},
-            ),
-            GraphNode(
-                id="mfa",
-                name="Multi-Factor Authentication",
-                type="Control",
-                aliases=["MFA", "2FA"],
-                source_documents=["doc_iso_001"],
-                page_numbers=[8, 9],
-                confidence=0.92,
-                properties={"category": "Authentication"},
-            ),
-        ]
-        for n in initial_nodes:
-            self._nodes[n.id.lower()] = n
-
-        self._edges.extend(
-            [
-                GraphRelationship(
-                    source="iso_27001",
-                    target="access_control_policy",
-                    type="MANDATES",
-                    confidence=0.95,
-                    source_document="doc_iso_001",
-                    page_number=8,
-                ),
-                GraphRelationship(
-                    source="access_control_policy",
-                    target="mfa",
-                    type="REQUIRES",
-                    confidence=0.92,
-                    source_document="doc_iso_001",
-                    page_number=8,
-                ),
-            ]
-        )
 
     def get_related_entities(self, entity_name: str) -> List[Dict[str, Any]]:
         logger.info(f"MockGraphInterface.get_related_entities('{entity_name}')")
@@ -179,6 +127,8 @@ class MockGraphInterface(AbstractGraphInterface):
 
     def get_subgraph(self, query: str, depth: int = 2) -> SubgraphResponse:
         logger.info(f"MockGraphInterface.get_subgraph('{query}', depth={depth})")
+        if not query or not query.strip():
+            return SubgraphResponse(nodes=list(self._nodes.values()), edges=list(self._edges))
         matched_nodes = self.search_graph(query)
         matched_ids = {n.id.lower() for n in matched_nodes}
 
@@ -201,6 +151,8 @@ class MockGraphInterface(AbstractGraphInterface):
 
     def search_graph(self, query: str) -> List[GraphNode]:
         logger.info(f"MockGraphInterface.search_graph('{query}')")
+        if not query or not query.strip():
+            return list(self._nodes.values())
         query_terms = query.lower().split()
         matched: List[GraphNode] = []
 
@@ -209,7 +161,7 @@ class MockGraphInterface(AbstractGraphInterface):
             if any(term in searchable for term in query_terms):
                 matched.append(node)
 
-        return matched if matched else list(self._nodes.values())[:2]
+        return matched
 
     def create_node(self, node: GraphNode) -> GraphNode:
         key = node.id.lower()
@@ -224,9 +176,18 @@ class MockGraphInterface(AbstractGraphInterface):
         self._nodes[key] = node
         return node
 
+    def create_nodes_batch(self, nodes: List[GraphNode]) -> List[GraphNode]:
+        for node in nodes:
+            self.create_node(node)
+        return nodes
+
     def create_relationship(self, relationship: GraphRelationship) -> GraphRelationship:
         self._edges.append(relationship)
         return relationship
+
+    def create_relationships_batch(self, relationships: List[GraphRelationship]) -> List[GraphRelationship]:
+        self._edges.extend(relationships)
+        return relationships
 
     def merge_duplicate_entities(self, canonical_name: str, duplicate_names: List[str]) -> bool:
         canonical_key = canonical_name.lower()
@@ -268,6 +229,14 @@ class MockGraphInterface(AbstractGraphInterface):
             nodes_deleted += 1
 
         return {"edges_deleted": edges_deleted, "nodes_deleted": nodes_deleted}
+
+    def clear_all(self) -> Dict[str, int]:
+        nodes_deleted = len(self._nodes)
+        edges_deleted = len(self._edges)
+        self._nodes.clear()
+        self._edges.clear()
+        logger.info(f"MockGraphInterface cleared: {nodes_deleted} nodes, {edges_deleted} edges deleted.")
+        return {"nodes_deleted": nodes_deleted, "edges_deleted": edges_deleted}
 
     def get_graph_statistics(self) -> GraphStatistics:
         node_cnt = len(self._nodes)
@@ -537,6 +506,46 @@ class Neo4jGraphInterface(AbstractGraphInterface):
             self._write_tx(session, lambda tx: tx.run(cypher, **params))
         return node
 
+    def create_nodes_batch(self, nodes: List[GraphNode]) -> List[GraphNode]:
+        if not nodes:
+            return []
+        cypher = """
+        UNWIND $batch AS item
+        MERGE (n:Entity {id: item.id})
+        ON CREATE SET n.name = item.name,
+                      n.type = item.type,
+                      n.aliases = item.aliases,
+                      n.source_documents = item.source_documents,
+                      n.page_numbers = item.page_numbers,
+                      n.confidence = item.confidence,
+                      n.created_at = item.created_at,
+                      n.updated_at = item.updated_at
+        ON MATCH SET n.name = item.name,
+                     n.type = item.type,
+                     n.aliases = [x IN n.aliases WHERE NOT x IN item.aliases] + item.aliases,
+                     n.source_documents = [x IN n.source_documents WHERE NOT x IN item.source_documents] + item.source_documents,
+                     n.page_numbers = [x IN n.page_numbers WHERE NOT x IN item.page_numbers] + item.page_numbers,
+                     n.confidence = CASE WHEN item.confidence > n.confidence THEN item.confidence ELSE n.confidence END,
+                     n.updated_at = item.updated_at
+        """
+        batch_params = [
+            {
+                "id": node.id,
+                "name": node.name,
+                "type": node.type,
+                "aliases": node.aliases,
+                "source_documents": node.source_documents,
+                "page_numbers": node.page_numbers,
+                "confidence": node.confidence,
+                "created_at": node.created_at,
+                "updated_at": node.updated_at,
+            }
+            for node in nodes
+        ]
+        with self._driver.session(database=self.database) as session:
+            self._write_tx(session, lambda tx: tx.run(cypher, batch=batch_params))
+        return nodes
+
     def create_relationship(self, relationship: GraphRelationship) -> GraphRelationship:
         rel_type_clean = re.sub(r"[^A-Za-z0-9_]", "_", relationship.type.upper())
         cypher = f"""
@@ -563,6 +572,42 @@ class Neo4jGraphInterface(AbstractGraphInterface):
         with self._driver.session(database=self.database) as session:
             self._write_tx(session, lambda tx: tx.run(cypher, **params))
         return relationship
+
+    def create_relationships_batch(self, relationships: List[GraphRelationship]) -> List[GraphRelationship]:
+        if not relationships:
+            return []
+        
+        rel_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for r in relationships:
+            rel_type_clean = re.sub(r"[^A-Za-z0-9_]", "_", r.type.upper())
+            if rel_type_clean not in rel_groups:
+                rel_groups[rel_type_clean] = []
+            rel_groups[rel_type_clean].append({
+                "source": r.source,
+                "target": r.target,
+                "rel_type": r.type,
+                "confidence": r.confidence,
+                "source_document": r.source_document,
+                "page_number": r.page_number,
+                "created_at": r.created_at,
+            })
+
+        with self._driver.session(database=self.database) as session:
+            for rel_type_clean, batch_params in rel_groups.items():
+                cypher = f"""
+                UNWIND $batch AS item
+                MATCH (a:Entity) WHERE a.id = item.source OR toLower(a.name) = toLower(item.source)
+                MATCH (b:Entity) WHERE b.id = item.target OR toLower(b.name) = toLower(item.target)
+                MERGE (a)-[r:{rel_type_clean}]->(b)
+                ON CREATE SET r.type = item.rel_type,
+                              r.confidence = item.confidence,
+                              r.source_document = item.source_document,
+                              r.page_number = item.page_number,
+                              r.created_at = item.created_at
+                ON MATCH SET r.confidence = CASE WHEN item.confidence > r.confidence THEN item.confidence ELSE r.confidence END
+                """
+                self._write_tx(session, lambda tx, c=cypher, b=batch_params: tx.run(c, batch=b))
+        return relationships
 
     def merge_duplicate_entities(self, canonical_name: str, duplicate_names: List[str]) -> bool:
         cypher = """
@@ -617,6 +662,13 @@ class Neo4jGraphInterface(AbstractGraphInterface):
                 nodes_deleted = r2["deleted_nodes"]
 
         return {"edges_deleted": edges_deleted, "nodes_deleted": nodes_deleted}
+
+    def clear_all(self) -> Dict[str, int]:
+        cypher = "MATCH (n) DETACH DELETE n"
+        with self._driver.session(database=self.database) as session:
+            self._write_tx(session, lambda tx: tx.run(cypher))
+        logger.info("Neo4j database cleared successfully.")
+        return {"status": "cleared"}
 
     def get_graph_statistics(self) -> GraphStatistics:
         cypher_stats = """

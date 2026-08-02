@@ -32,6 +32,9 @@ export function useProjects() {
 interface CreateProjectPayload {
   name: string;
   description: string;
+  frameworks?: string[];
+  owner?: string;
+  members: ProjectMember[];
 }
 
 export function useCreateProject() {
@@ -51,6 +54,40 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: async (projectId: string) => {
       const res = await apiClient.delete<ApiResponse<{ project_id: string }>>(`/projects/${projectId}`);
+      return res.data.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: PROJECTS_KEY }),
+  });
+}
+
+// ─── Sub-member mutations ────────────────────────────────────────────────────
+export function useAddProjectMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, member }: { projectId: string; member: { name: string; email: string; role: string } }): Promise<Project> => {
+      const res = await apiClient.post<ApiResponse<Project>>(`/projects/${projectId}/members`, member);
+      return res.data.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: PROJECTS_KEY }),
+  });
+}
+
+export function useRemoveProjectMember() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, memberId }: { projectId: string; memberId: string }): Promise<Project> => {
+      const res = await apiClient.delete<ApiResponse<Project>>(`/projects/${projectId}/members/${memberId}`);
+      return res.data.data;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: PROJECTS_KEY }),
+  });
+}
+
+export function useUpdateProjectMemberRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ projectId, memberId, role }: { projectId: string; memberId: string; role: string }): Promise<Project> => {
+      const res = await apiClient.patch<ApiResponse<Project>>(`/projects/${projectId}/members/${memberId}`, { role });
       return res.data.data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: PROJECTS_KEY }),

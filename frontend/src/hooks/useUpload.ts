@@ -82,8 +82,11 @@ export function useUploadPDF(options?: UploadPDFOptions) {
   return useMutation({
     mutationFn: (files: File[]) => uploadPDFWithProgress(files, token, options),
     onSuccess: () => {
-      // Invalidate graph + stats so dashboard/graph refreshes after upload
+      // Invalidate documents, graph, and statistics so all views refresh immediately after upload
+      qc.invalidateQueries({ queryKey: ['documents'] });
       qc.invalidateQueries({ queryKey: ['graph'] });
+      qc.invalidateQueries({ queryKey: ['statistics'] });
+      qc.invalidateQueries({ queryKey: ['projects'] });
     },
     onError: (err) => console.error('Upload error:', getErrorMessage(err)),
   });

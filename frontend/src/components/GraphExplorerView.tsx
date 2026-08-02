@@ -20,39 +20,7 @@ export const GraphExplorerView: React.FC = () => {
 
   const initialNodes: GraphNode[] = useMemo(() => {
     if (!graphData?.nodes?.length) {
-      // Fallback demo nodes if backend has no data yet
-      return [
-        {
-          id: 'node-finance', label: 'Finance Ops', type: 'Department', x: 340, y: 260,
-          properties: { owner: 'Finance Dept.', lastReviewed: 'Nov 04, 2023', sensitivity: 'High', dataLocality: 'US-East-1' },
-          relationships: [{ type: 'IMPLEMENTS', targetId: 'node-aml', targetLabel: 'AML Compliance' }],
-          sourceDocs: [{ name: 'finance_policy_2024.pdf', size: '2.8 MB', updated: '1d ago' }],
-        },
-        {
-          id: 'node-aml', label: 'AML Compliance', type: 'Policy', x: 650, y: 380, status: 'Compliant', version: 'v2.4.0',
-          properties: { owner: 'Compliance Dept.', lastReviewed: 'Oct 12, 2023', sensitivity: 'High', dataLocality: 'Global' },
-          relationships: [{ type: 'GOVERNED BY', targetId: 'node-gdpr', targetLabel: 'GDPR Art. 12' }],
-          sourceDocs: [{ name: 'compliance_v2_final.pdf', size: '4.2 MB', updated: '3d ago' }],
-        },
-        {
-          id: 'node-gdpr', label: 'GDPR Art. 12', type: 'Regulation', x: 400, y: 100,
-          properties: { owner: 'Legal Affairs', lastReviewed: 'Jan 15, 2024', sensitivity: 'Critical', dataLocality: 'EU-West-1' },
-          relationships: [{ type: 'GOVERNS', targetId: 'node-aml', targetLabel: 'AML Compliance' }],
-          sourceDocs: [{ name: 'eu_gdpr_article12_guideline.pdf', size: '1.4 MB', updated: '5d ago' }],
-        },
-        {
-          id: 'node-breach', label: 'Data Breach', type: 'Risk', x: 450, y: 580, status: 'Breach',
-          properties: { owner: 'InfoSec Audit', lastReviewed: 'Yesterday', sensitivity: 'Critical', dataLocality: 'Shared_Drive_A' },
-          relationships: [{ type: 'AUDITED BY', targetId: 'node-audit', targetLabel: 'Q3 Review' }],
-          sourceDocs: [{ name: 'data_leak_investigation.pdf', size: '5.1 MB', updated: '4h ago' }],
-        },
-        {
-          id: 'node-audit', label: 'Q3 Review', type: 'Audit', x: 720, y: 630,
-          properties: { owner: 'Internal Audit', lastReviewed: 'Sep 30, 2023', sensitivity: 'Medium', dataLocality: 'US-Central' },
-          relationships: [{ type: 'MONITORS', targetId: 'node-breach', targetLabel: 'Data Breach' }],
-          sourceDocs: [{ name: 'q3_internal_audit_summary.docx', size: '890 KB', updated: '1w ago' }],
-        },
-      ];
+      return [];
     }
 
     // Map backend nodes to GraphNode format with auto-layout

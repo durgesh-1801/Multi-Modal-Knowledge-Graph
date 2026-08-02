@@ -17,6 +17,9 @@ from app.schemas.graph import GraphNode, GraphRelationship
 from app.schemas.relationship import Relationship
 
 
+from app.dependencies import get_graph_interface
+
+
 class GraphBuilderService:
     """
     Service responsible for converting extracted entities & relationships into Neo4j graph nodes
@@ -24,7 +27,7 @@ class GraphBuilderService:
     """
 
     def __init__(self, graph_db: Optional[AbstractGraphInterface] = None) -> None:
-        self.graph_db: AbstractGraphInterface = graph_db or MockGraphInterface()
+        self.graph_db: AbstractGraphInterface = graph_db if graph_db is not None else get_graph_interface()
 
     def build_graph_from_extraction(
         self,
@@ -54,12 +57,13 @@ class GraphBuilderService:
             f"{len(entities)} entities, {len(relationships)} relationships"
         )
 
-        nodes_processed = 0
-        edges_processed = 0
         now_str = datetime.utcnow().isoformat()
 
-        # 1. Process & Insert Entity Nodes
+        # Sub-step 1: Prepare Node Batch
+        t_node_prep = time.time()
+        nodes_to_create: List[GraphNode] = []
         created_node_ids = set()
+
         for ent in entities:
             if ent.confidence < min_confidence:
                 continue
@@ -81,11 +85,27 @@ class GraphBuilderService:
                     **ent.metadata,
                 },
             )
-            self.graph_db.create_node(graph_node)
+            nodes_to_create.append(graph_node)
             created_node_ids.add(node_id)
-            nodes_processed += 1
 
-        # 2. Process & Insert Relationship Edges
+        node_prep_ms = (time.time() - t_node_prep) * 1000.0
+        logger.info(f"[PERF] [GraphBuilder] NodeBatchPreparation: {node_prep_ms:.2f} ms ({len(nodes_to_create)} nodes)")
+
+        # Sub-step 2: Store Node Batch
+        t_node_store = time.time()
+        if hasattr(self.graph_db, "create_nodes_batch"):
+            self.graph_db.create_nodes_batch(nodes_to_create)
+        else:
+            for n in nodes_to_create:
+                self.graph_db.create_node(n)
+        node_store_ms = (time.time() - t_node_store) * 1000.0
+        logger.info(f"[PERF] [GraphBuilder] GraphDBNodeStorage: {node_store_ms:.2f} ms")
+
+        # Sub-step 3: Prepare Edge Batch & Missing Implicit Nodes
+        t_edge_prep = time.time()
+        relationships_to_create: List[GraphRelationship] = []
+        implicit_nodes_to_create: List[GraphNode] = []
+
         for rel in relationships:
             if rel.confidence < min_confidence:
                 continue
@@ -95,7 +115,7 @@ class GraphBuilderService:
 
             # Ensure source and target nodes exist in graph
             if src_id not in created_node_ids:
-                self.graph_db.create_node(
+                implicit_nodes_to_create.append(
                     GraphNode(
                         id=src_id,
                         name=rel.source.strip(),
@@ -103,10 +123,14 @@ class GraphBuilderService:
                         source_documents=[document_id],
                         page_numbers=[page_number],
                         confidence=rel.confidence,
+                        created_at=now_str,
+                        updated_at=now_str,
                     )
                 )
+                created_node_ids.add(src_id)
+
             if tgt_id not in created_node_ids:
-                self.graph_db.create_node(
+                implicit_nodes_to_create.append(
                     GraphNode(
                         id=tgt_id,
                         name=rel.target.strip(),
@@ -114,8 +138,11 @@ class GraphBuilderService:
                         source_documents=[document_id],
                         page_numbers=[page_number],
                         confidence=rel.confidence,
+                        created_at=now_str,
+                        updated_at=now_str,
                     )
                 )
+                created_node_ids.add(tgt_id)
 
             graph_rel = GraphRelationship(
                 source=rel.source.strip(),
@@ -131,18 +158,41 @@ class GraphBuilderService:
                     **rel.metadata,
                 },
             )
-            self.graph_db.create_relationship(graph_rel)
-            edges_processed += 1
+            relationships_to_create.append(graph_rel)
+
+        edge_prep_ms = (time.time() - t_edge_prep) * 1000.0
+        logger.info(f"[PERF] [GraphBuilder] EdgeBatchPreparation: {edge_prep_ms:.2f} ms ({len(relationships_to_create)} edges)")
+
+        # Store implicit nodes if any were generated
+        if implicit_nodes_to_create:
+            if hasattr(self.graph_db, "create_nodes_batch"):
+                self.graph_db.create_nodes_batch(implicit_nodes_to_create)
+            else:
+                for n in implicit_nodes_to_create:
+                    self.graph_db.create_node(n)
+
+        # Sub-step 4: Store Edge Batch
+        t_edge_store = time.time()
+        if hasattr(self.graph_db, "create_relationships_batch"):
+            self.graph_db.create_relationships_batch(relationships_to_create)
+        else:
+            for r in relationships_to_create:
+                self.graph_db.create_relationship(r)
+        edge_store_ms = (time.time() - t_edge_store) * 1000.0
+        logger.info(f"[PERF] [GraphBuilder] GraphDBEdgeStorage: {edge_store_ms:.2f} ms")
 
         duration_ms = round((time.time() - start_time) * 1000, 2)
+        total_nodes = len(nodes_to_create) + len(implicit_nodes_to_create)
+        total_edges = len(relationships_to_create)
+
         logger.info(
             f"Successfully stored Knowledge Graph for '{document_id}': "
-            f"{nodes_processed} nodes, {edges_processed} edges ({duration_ms} ms)"
+            f"{total_nodes} nodes, {total_edges} edges ({duration_ms} ms)"
         )
 
         return {
             "document_id": document_id,
-            "nodes_stored": nodes_processed,
-            "edges_stored": edges_processed,
+            "nodes_stored": total_nodes,
+            "edges_stored": total_edges,
             "duration_ms": duration_ms,
         }

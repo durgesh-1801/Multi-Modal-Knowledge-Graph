@@ -4,14 +4,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient, ApiResponse } from '../lib/api';
 
-// ─── Backend chat response shape ──────────────────────────────────────────────
+// ─── Backend chat citation shape (matches backend ChatCitation schema) ─────────
+export interface BackendChatCitation {
+  document: string;
+  page: number;
+  snippet: string;
+  relevance: number;
+  chunk_id: string;
+}
+
+// ─── Backend chat response shape (matches backend ChatResponse schema) ──────────
 export interface BackendChatResponse {
+  success: boolean;
   answer: string;
   confidence: number;
-  citations: string[];
-  source_chunks: Array<{ source: string; content: string; score: number }>;
-  graph_nodes: string[];
-  processing_time_ms?: number;
+  // citations are objects, NOT strings
+  citations: BackendChatCitation[];
+  // backend field is related_entities, not graph_nodes
+  related_entities: string[];
+  // backend field is processing_time (seconds), not processing_time_ms
+  processing_time: number;
+  query_type: string;
   conversation_id: string;
 }
 

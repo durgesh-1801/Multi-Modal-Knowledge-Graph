@@ -55,51 +55,51 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         llm = get_llm_provider_instance()
         if settings.GROQ_API_KEY:
-            logger.info("✓ Groq Connected")
+            logger.info("[OK] Groq Connected")
         else:
-            logger.info(f"✓ LLM Provider Connected ({llm.provider_name})")
+            logger.info(f"[OK] LLM Provider Connected ({llm.provider_name})")
     except Exception as err:
-        logger.warning(f"✗ LLM Provider Check Warning: {err}")
+        logger.warning(f"[WARN] LLM Provider Check Warning: {err}")
 
     # Validate Neo4j Knowledge Graph DB
     try:
         graph_interface = get_graph_interface(settings=settings)
         if graph_interface:
-            logger.info("✓ Neo4j Connected")
+            logger.info("[OK] Neo4j Connected")
         else:
-            logger.warning("✗ Neo4j Check Warning: Interface not initialized")
+            logger.warning("[WARN] Neo4j Check Warning: Interface not initialized")
     except Exception as err:
-        logger.warning(f"✗ Neo4j Check Warning: {err}")
+        logger.warning(f"[WARN] Neo4j Check Warning: {err}")
 
     # Validate Qdrant Vector Store
     try:
         qdrant_mgr = QdrantClientManager()
         q_client = qdrant_mgr.connect()
         if qdrant_mgr.url and "cloud.qdrant.io" in qdrant_mgr.url:
-            logger.info("✓ Qdrant Cloud Connected")
+            logger.info("[OK] Qdrant Cloud Connected")
         else:
-            logger.info("✓ Qdrant Connected")
+            logger.info("[OK] Qdrant Connected")
     except Exception as err:
-        logger.warning(f"✗ Qdrant Check Warning: {err}")
+        logger.warning(f"[WARN] Qdrant Check Warning: {err}")
 
     # Validate spaCy NER Model
     try:
         spacy_ext = SpacyExtractor()
         nlp = spacy_ext._load_spacy()
         if hasattr(nlp, "pipe") and nlp != "FALLBACK":
-            logger.info("✓ spaCy Model Loaded")
+            logger.info("[OK] spaCy Model Loaded")
         else:
-            logger.warning("✗ spaCy Model Check Warning: Fallback model active")
+            logger.warning("[WARN] spaCy Model Check Warning: Fallback model active")
     except Exception as err:
-        logger.warning(f"✗ spaCy Check Warning: {err}")
+        logger.warning(f"[WARN] spaCy Check Warning: {err}")
 
     # Validate Embedding Model Singleton
     try:
         embed_svc = get_embedding_service()
         embed_svc.load_model()
-        logger.info("✓ Embedding Model Ready")
+        logger.info("[OK] Embedding Model Ready")
     except Exception as err:
-        logger.warning(f"✗ Embedding Model Check Warning: {err}")
+        logger.warning(f"[WARN] Embedding Model Check Warning: {err}")
 
     logger.info("====================================================")
 

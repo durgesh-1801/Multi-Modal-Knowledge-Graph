@@ -9,8 +9,13 @@ import { GraphStatistics, SubgraphResponse, BackendGraphNode } from '../types';
 export const DEFAULT_GRAPH_STATS: GraphStatistics = {
   total_nodes: 0,
   total_edges: 0,
+  total_documents: 0,
+  node_count: 0,
+  relationship_count: 0,
+  document_count: 0,
   node_type_distribution: {},
   avg_degree: 0,
+  average_degree: 0,
   graph_density: 0,
   most_connected_entities: [],
 };
@@ -112,11 +117,23 @@ export function useGraphStats() {
       try {
         const res = await apiClient.get<ApiResponse<GraphStatistics>>('/graph/statistics');
         const data = res.data?.data;
+        const nodes = typeof data?.node_count === 'number' ? data.node_count : (typeof data?.total_nodes === 'number' ? data.total_nodes : 0);
+        const rels = typeof data?.relationship_count === 'number' ? data.relationship_count : (typeof data?.total_edges === 'number' ? data.total_edges : 0);
+        const docs = typeof data?.document_count === 'number' ? data.document_count : (typeof data?.total_documents === 'number' ? data.total_documents : 0);
+        const avgDeg = typeof data?.average_degree === 'number' ? data.average_degree : (typeof data?.avg_degree === 'number' ? data.avg_degree : 0);
+        const types = data?.entity_types || data?.node_type_distribution || {};
+
         return {
-          total_nodes: typeof data?.total_nodes === 'number' ? data.total_nodes : 0,
-          total_edges: typeof data?.total_edges === 'number' ? data.total_edges : 0,
-          node_type_distribution: data?.node_type_distribution || {},
-          avg_degree: typeof data?.avg_degree === 'number' ? data.avg_degree : 0,
+          total_nodes: nodes,
+          total_edges: rels,
+          total_documents: docs,
+          node_count: nodes,
+          relationship_count: rels,
+          document_count: docs,
+          node_type_distribution: types,
+          entity_types: types,
+          avg_degree: avgDeg,
+          average_degree: avgDeg,
           graph_density: typeof data?.graph_density === 'number' ? data.graph_density : 0,
           most_connected_entities: Array.isArray(data?.most_connected_entities) ? data.most_connected_entities : [],
         };

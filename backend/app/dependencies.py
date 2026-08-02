@@ -33,7 +33,7 @@ def _is_neo4j_reachable(uri: str, timeout: float = 1.0) -> bool:
 
 
 def get_graph_interface(
-    settings: Settings = Depends(get_settings),
+    settings: Optional[Settings] = None,
 ) -> AbstractGraphInterface:
     """
     Dependency provider returning the Knowledge Graph Interface.
@@ -42,6 +42,9 @@ def get_graph_interface(
     """
     global _GRAPH_INTERFACE_INSTANCE
     if _GRAPH_INTERFACE_INSTANCE is None:
+        if settings is None or not isinstance(settings, Settings):
+            settings = get_settings()
+
         try:
             logger.info(f"Connecting to Neo4j Graph DB at '{settings.NEO4J_URI}'")
             neo4j_adapter = Neo4jGraphInterface(

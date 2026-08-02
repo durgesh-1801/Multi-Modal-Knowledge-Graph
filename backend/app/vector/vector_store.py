@@ -19,7 +19,7 @@ from app.schemas.embeddings import (
 )
 from app.services.chunking_service import ChunkingService
 from app.services.embedding_service import EmbeddingService, get_embedding_service
-from app.vector.qdrant_client import QdrantClientManager
+from app.vector.qdrant_client import QdrantClientManager, get_qdrant_manager
 
 
 class VectorStoreService:
@@ -31,7 +31,7 @@ class VectorStoreService:
     def __init__(self) -> None:
         self.chunker: ChunkingService = ChunkingService()
         self.embedder: EmbeddingService = get_embedding_service()
-        self.qdrant: QdrantClientManager = QdrantClientManager()
+        self.qdrant: QdrantClientManager = get_qdrant_manager()
         self.collection_name: str = settings.QDRANT_COLLECTION_NAME
 
     def process_and_store_document(
@@ -220,6 +220,13 @@ class VectorStoreService:
             collection_name=self.collection_name, document_id=document_id
         )
 
+    def clear_all_vectors(self) -> bool:
+        """Deletes and recreates the Qdrant vector collection to clear all vectors."""
+        logger.info(f"Clearing all vectors from collection '{self.collection_name}'")
+        vector_dim = self.embedder.get_dimension()
+        self.qdrant.delete_collection(self.collection_name)
+        return self.qdrant.create_collection(self.collection_name, vector_size=vector_dim)
+
     def get_health(self) -> Dict[str, Any]:
         """Checks Qdrant vector store health status."""
         is_healthy = self.qdrant.health_check()
@@ -230,3 +237,22 @@ class VectorStoreService:
             "embedding_model": self.embedder.model_name,
             "embedding_dimension": self.embedder.get_dimension(),
         }
+
+    def get_vector_count(self) -> int:
+        """Returns the total number of vector points stored in Qdrant collection."""
+        try:
+            client = self.qdrant.connect()
+            if client is None:
+                return 0
+            if not client.collection_exists(self.collection_name):
+                return 0
+            info = client.get_collection(self.collection_name)
+            # Qdrant SDK v1.x: points_count is on vectors_count or points_count
+            count = getattr(info, "points_count", None)
+            if count is None:
+                count = getattr(info, "vectors_count", 0)
+            return int(count or 0)
+        except Exception as err:
+            logger.warning(f"Could not retrieve vector count from Qdrant: {err}")
+            return 0
+
