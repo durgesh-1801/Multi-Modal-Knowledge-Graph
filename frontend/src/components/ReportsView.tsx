@@ -168,10 +168,10 @@ const FullReport: React.FC<{ report: ReportData; user: { name?: string; email?: 
           <SectionHeader icon="category" title="Entity Type Distribution" badge="Neo4j" />
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             {Object.entries(report.entityTypeDistribution)
-              .sort(([, a], [, b]) => b - a)
+              .sort(([, a], [, b]) => (b as number) - (a as number))
               .map(([type, count]) => {
-                const total = Object.values(report.entityTypeDistribution).reduce((s, v) => s + v, 0);
-                const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                const total = (Object.values(report.entityTypeDistribution) as number[]).reduce((s: number, v: number) => s + v, 0);
+                const pct = total > 0 ? Math.round((Number(count) / total) * 100) : 0;
                 return (
                   <div key={type} className="bg-slate-50 rounded-xl border border-slate-200 p-3">
                     <div className="flex items-center justify-between mb-2">

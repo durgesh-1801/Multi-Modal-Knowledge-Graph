@@ -45,6 +45,13 @@ backend/test_output/
 .coverage
 htmlcov/
 
+# Storage & Database
+qdrant_storage/
+backend/qdrant_storage/
+*.sqlite
+*.sqlite3
+*.db
+
 # IDE & Editors
 .vscode/
 .idea/

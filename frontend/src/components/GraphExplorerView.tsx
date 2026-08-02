@@ -1,437 +1,789 @@
-import React, { useState, useMemo } from 'react';
-import { GraphNode } from '../types';
-import { useGraphOverview } from '../hooks/useGraph';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import { useGraphOverview, useGraphStats } from '../hooks/useGraph';
 import { useSendMessage } from '../hooks/useChat';
+import { BackendGraphNode, BackendGraphEdge } from '../types';
 
-export const GraphExplorerView: React.FC = () => {
-  const [zoomLevel, setZoomLevel] = useState(1);
-  const [panMode, setPanMode] = useState(false);
-  const [aiAnalyzing, setAiAnalyzing] = useState(false);
-  const [aiResult, setAiResult] = useState<string | null>(null);
+// ─── Node position after layout ──────────────────────────────────────────────
+interface LayoutNode extends BackendGraphNode {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  fx: number | null;
+  fy: number | null;
+  radius: number;
+  degree: number;
+}
 
-  // ── Real API data ───────────────────────────────────────────────────────────
-  const { data: graphData, isLoading: graphLoading } = useGraphOverview(100);
-  const { mutateAsync: sendMessage } = useSendMessage();
+// ─── Color maps ───────────────────────────────────────────────────────────────
+const TYPE_COLOR: Record<string, { fill: string; stroke: string; text: string }> = {
+  Framework:    { fill: '#3b82f6', stroke: '#60a5fa', text: '#dbeafe' },
+  Policy:       { fill: '#8b5cf6', stroke: '#a78bfa', text: '#ede9fe' },
+  Control:      { fill: '#06b6d4', stroke: '#22d3ee', text: '#cffafe' },
+  Risk:         { fill: '#ef4444', stroke: '#f87171', text: '#fee2e2' },
+  Requirement:  { fill: '#f59e0b', stroke: '#fbbf24', text: '#fef3c7' },
+  Person:       { fill: '#10b981', stroke: '#34d399', text: '#d1fae5' },
+  Organization: { fill: '#6366f1', stroke: '#818cf8', text: '#e0e7ff' },
+  System:       { fill: '#0ea5e9', stroke: '#38bdf8', text: '#e0f2fe' },
+  Document:     { fill: '#64748b', stroke: '#94a3b8', text: '#e2e8f0' },
+  Department:   { fill: '#f97316', stroke: '#fb923c', text: '#ffedd5' },
+  Regulation:   { fill: '#14b8a6', stroke: '#2dd4bf', text: '#ccfbf1' },
+  Audit:        { fill: '#a855f7', stroke: '#c084fc', text: '#f3e8ff' },
+  Entity:       { fill: '#475569', stroke: '#64748b', text: '#e2e8f0' },
+};
+const defaultColor = { fill: '#475569', stroke: '#64748b', text: '#e2e8f0' };
+const getColor = (type: string) => TYPE_COLOR[type] || defaultColor;
 
-  // ── Map backend nodes to frontend GraphNode format ────────────────────────
-  const NODE_TYPES = ['Department', 'Policy', 'Regulation', 'Risk', 'Audit', 'Person', 'Data'] as const;
-  const CANVAS_W = 900;
-  const CANVAS_H = 700;
+const TYPE_ICON: Record<string, string> = {
+  Framework: 'verified_user', Policy: 'policy', Control: 'security',
+  Risk: 'warning', Requirement: 'rule', Person: 'person',
+  Organization: 'domain', System: 'hub', Document: 'description',
+  Department: 'corporate_fare', Regulation: 'gavel', Audit: 'fact_check',
+};
+const getIcon = (type: string) => TYPE_ICON[type] || 'grain';
 
-  const initialNodes: GraphNode[] = useMemo(() => {
-    if (!graphData?.nodes?.length) {
-      return [];
+// ─── Simple force-directed layout ────────────────────────────────────────────
+function forceLayout(
+  nodes: LayoutNode[],
+  edges: BackendGraphEdge[],
+  iterations = 120,
+  width = 900,
+  height = 700,
+): LayoutNode[] {
+  if (nodes.length === 0) return nodes;
+
+  const k = Math.sqrt((width * height) / Math.max(nodes.length, 1));
+  const idxMap = new Map<string, number>();
+  nodes.forEach((n, i) => idxMap.set(n.id, i));
+
+  for (let iter = 0; iter < iterations; iter++) {
+    const cooling = 1 - iter / iterations;
+    const temp = k * cooling * 0.5;
+
+    // Repulsion
+    for (let i = 0; i < nodes.length; i++) {
+      nodes[i].vx = 0;
+      nodes[i].vy = 0;
+      for (let j = 0; j < nodes.length; j++) {
+        if (i === j) continue;
+        const dx = nodes[i].x - nodes[j].x;
+        const dy = nodes[i].y - nodes[j].y;
+        const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+        const force = (k * k) / dist;
+        nodes[i].vx += (dx / dist) * force;
+        nodes[i].vy += (dy / dist) * force;
+      }
     }
 
-    // Map backend nodes to GraphNode format with auto-layout
-    return graphData.nodes.map((backendNode, idx) => {
-      const angle = (idx / graphData.nodes.length) * 2 * Math.PI;
-      const radius = Math.min(CANVAS_W, CANVAS_H) * 0.3;
-      const cx = CANVAS_W / 2;
-      const cy = CANVAS_H / 2;
-      const x = Math.round(cx + radius * Math.cos(angle)) - 60;
-      const y = Math.round(cy + radius * Math.sin(angle)) - 30;
+    // Attraction along edges
+    for (const edge of edges) {
+      const si = idxMap.get(edge.source);
+      const ti = idxMap.get(edge.target);
+      if (si === undefined || ti === undefined) continue;
+      const dx = nodes[ti].x - nodes[si].x;
+      const dy = nodes[ti].y - nodes[si].y;
+      const dist = Math.max(Math.sqrt(dx * dx + dy * dy), 1);
+      const force = (dist * dist) / k;
+      const fx = (dx / dist) * force;
+      const fy = (dy / dist) * force;
+      nodes[si].vx += fx;
+      nodes[si].vy += fy;
+      nodes[ti].vx -= fx;
+      nodes[ti].vy -= fy;
+    }
 
-      const nodeType = backendNode.type as GraphNode['type'] || 'Policy';
-      const validType = NODE_TYPES.includes(nodeType as typeof NODE_TYPES[number]) ? nodeType : 'Policy';
+    // Gravity toward center
+    for (const n of nodes) {
+      n.vx += ((width / 2) - n.x) * 0.01;
+      n.vy += ((height / 2) - n.y) * 0.01;
+    }
 
-      // Build relationships from edges
-      const outEdges = (graphData.edges || []).filter((e) => e.source === backendNode.id);
-      const relationships = outEdges.map((e) => ({
-        type: e.type,
-        targetId: e.target,
-        targetLabel: graphData.nodes.find((n) => n.id === e.target)?.name || e.target,
-      }));
+    // Apply velocity with temp cap
+    for (const n of nodes) {
+      if (n.fx !== null) { n.x = n.fx; n.y = n.fy!; continue; }
+      const speed = Math.sqrt(n.vx * n.vx + n.vy * n.vy);
+      if (speed > temp) { n.vx = (n.vx / speed) * temp; n.vy = (n.vy / speed) * temp; }
+      n.x = Math.max(n.radius + 10, Math.min(width - n.radius - 10, n.x + n.vx));
+      n.y = Math.max(n.radius + 10, Math.min(height - n.radius - 10, n.y + n.vy));
+    }
+  }
 
+  return nodes;
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+export const GraphExplorerView: React.FC = () => {
+  const { data: graphData, isLoading } = useGraphOverview(500);
+  const { data: graphStats } = useGraphStats();
+  const { mutateAsync: sendMessage } = useSendMessage();
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState<{ nodeId: string | null; canvas: boolean }>({ nodeId: null, canvas: false });
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
+  const [layoutNodes, setLayoutNodes] = useState<LayoutNode[]>([]);
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const panRef = useRef(pan);
+  const zoomRef = useRef(zoom);
+  const layoutRef = useRef<LayoutNode[]>([]);
+  panRef.current = pan;
+  zoomRef.current = zoom;
+  layoutRef.current = layoutNodes;
+
+  const W = 900, H = 700;
+
+  // Build layout nodes from backend data
+  useEffect(() => {
+    const rawNodes = graphData?.nodes ?? [];
+    const rawEdges = graphData?.edges ?? [];
+    if (!rawNodes.length) { setLayoutNodes([]); return; }
+
+    // Count degree
+    const degMap = new Map<string, number>();
+    for (const e of rawEdges) {
+      degMap.set(e.source, (degMap.get(e.source) ?? 0) + 1);
+      degMap.set(e.target, (degMap.get(e.target) ?? 0) + 1);
+    }
+
+    const nodes: LayoutNode[] = rawNodes.map((n, i) => {
+      const angle = (i / rawNodes.length) * 2 * Math.PI;
+      const r = Math.min(W, H) * 0.32;
+      const deg = degMap.get(n.id) ?? 0;
       return {
-        id: backendNode.id,
-        label: backendNode.name || backendNode.id,
-        type: validType as GraphNode['type'],
-        x,
-        y,
-        properties: {
-          owner: String(backendNode.properties?.owner || 'Unknown'),
-          lastReviewed: String(backendNode.properties?.last_reviewed || 'N/A'),
-          sensitivity: (backendNode.properties?.sensitivity as 'Low' | 'Medium' | 'High' | 'Critical') || 'Medium',
-          dataLocality: String(backendNode.properties?.data_locality || 'Global'),
-        },
-        relationships,
-        sourceDocs: [],
-      } as GraphNode;
+        ...n,
+        x: W / 2 + r * Math.cos(angle),
+        y: H / 2 + r * Math.sin(angle),
+        vx: 0, vy: 0, fx: null, fy: null,
+        radius: Math.max(18, Math.min(18 + deg * 2.5, 34)),
+        degree: deg,
+      };
     });
+
+    const laid = forceLayout(nodes, rawEdges);
+    setLayoutNodes(laid);
   }, [graphData]);
 
+  // Canvas renderer
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+    const nodes = layoutRef.current;
+    const edges = graphData?.edges ?? [];
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      ctx.scale(dpr, dpr);
+    }
 
-  const activeNode = selectedNode || initialNodes[0] || {
-    id: 'node-fallback',
-    label: 'No Node Selected',
-    type: 'Policy',
-    x: 0,
-    y: 0,
+    ctx.clearRect(0, 0, w, h);
+
+    // Grid dots
+    ctx.save();
+    ctx.fillStyle = 'rgba(148,163,184,0.08)';
+    const gridSpacing = 30;
+    for (let gx = 0; gx < w; gx += gridSpacing) {
+      for (let gy = 0; gy < h; gy += gridSpacing) {
+        ctx.beginPath();
+        ctx.arc(gx, gy, 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(panRef.current.x, panRef.current.y);
+    ctx.scale(zoomRef.current, zoomRef.current);
+
+    const nodeIdxMap = new Map<string, LayoutNode>();
+    nodes.forEach(n => nodeIdxMap.set(n.id, n));
+
+    const selNode = selectedId ? nodeIdxMap.get(selectedId) : null;
+    const hovNode = hoveredId ? nodeIdxMap.get(hoveredId) : null;
+
+    const connectedIds = new Set<string>();
+    const connectedEdgeIndices = new Set<number>();
+    if (selNode) {
+      connectedIds.add(selNode.id);
+      edges.forEach((e, i) => {
+        if (e.source === selNode.id || e.target === selNode.id) {
+          connectedIds.add(e.source);
+          connectedIds.add(e.target);
+          connectedEdgeIndices.add(i);
+        }
+      });
+    }
+
+    const hasSelection = !!selNode;
+
+    // Draw edges
+    edges.forEach((edge, i) => {
+      const src = nodeIdxMap.get(edge.source);
+      const tgt = nodeIdxMap.get(edge.target);
+      if (!src || !tgt) return;
+
+      const isHighlighted = connectedEdgeIndices.has(i);
+      const isDimmed = hasSelection && !isHighlighted;
+      const isHoveredEdge = hovNode && (edge.source === hovNode.id || edge.target === hovNode.id);
+
+      ctx.beginPath();
+      ctx.moveTo(src.x, src.y);
+      ctx.lineTo(tgt.x, tgt.y);
+
+      if (isDimmed) {
+        ctx.strokeStyle = 'rgba(148,163,184,0.08)';
+        ctx.lineWidth = 1;
+      } else if (isHighlighted || isHoveredEdge) {
+        ctx.strokeStyle = 'rgba(99,179,237,0.9)';
+        ctx.lineWidth = 2.5;
+      } else {
+        ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+        ctx.lineWidth = 1.2;
+      }
+      ctx.stroke();
+
+      // Arrow
+      if (!isDimmed) {
+        const angle = Math.atan2(tgt.y - src.y, tgt.x - src.x);
+        const arrowDist = tgt.radius + 5;
+        const ax = tgt.x - arrowDist * Math.cos(angle);
+        const ay = tgt.y - arrowDist * Math.sin(angle);
+        ctx.beginPath();
+        ctx.fillStyle = isHighlighted || isHoveredEdge ? 'rgba(99,179,237,0.9)' : 'rgba(148,163,184,0.3)';
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(ax - 8 * Math.cos(angle - Math.PI / 6), ay - 8 * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(ax - 8 * Math.cos(angle + Math.PI / 6), ay - 8 * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fill();
+
+        // Edge label on highlight
+        if (isHighlighted && zoom > 0.7) {
+          const mx = (src.x + tgt.x) / 2;
+          const my = (src.y + tgt.y) / 2;
+          ctx.font = 'bold 8px Inter, sans-serif';
+          ctx.fillStyle = 'rgba(148,163,184,0.9)';
+          ctx.textAlign = 'center';
+          ctx.fillText(edge.type || '', mx, my - 5);
+        }
+      }
+    });
+
+    // Draw nodes
+    nodes.forEach(node => {
+      const color = getColor(node.type);
+      const isSelected = node.id === selectedId;
+      const isHovered = node.id === hoveredId;
+      const isDimmed = hasSelection && !connectedIds.has(node.id);
+      const r = node.radius;
+
+      ctx.save();
+      ctx.globalAlpha = isDimmed ? 0.2 : 1;
+
+      // Glow
+      if (isSelected || isHovered) {
+        ctx.shadowColor = color.stroke;
+        ctx.shadowBlur = isSelected ? 20 : 12;
+      }
+
+      // Circle fill
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+      const grad = ctx.createRadialGradient(node.x - r * 0.3, node.y - r * 0.3, 0, node.x, node.y, r);
+      grad.addColorStop(0, color.stroke);
+      grad.addColorStop(1, color.fill);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Ring for selected
+      if (isSelected) {
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      } else if (isHovered) {
+        ctx.strokeStyle = color.stroke;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      ctx.shadowBlur = 0;
+
+      // Label
+      if (zoom > 0.55 || isSelected || isHovered) {
+        const labelY = node.y + r + 13;
+        const label = node.name || node.id;
+        const maxW = 100;
+        ctx.font = isSelected ? 'bold 11px Inter, sans-serif' : '10px Inter, sans-serif';
+        ctx.fillStyle = isSelected ? '#f8fafc' : '#cbd5e1';
+        ctx.textAlign = 'center';
+
+        // Truncate
+        let displayLabel = label;
+        while (ctx.measureText(displayLabel).width > maxW && displayLabel.length > 4) {
+          displayLabel = displayLabel.slice(0, -4) + '…';
+        }
+
+        ctx.fillText(displayLabel, node.x, labelY);
+
+        // Type badge on selected/hover
+        if (isSelected || (isHovered && zoom > 0.7)) {
+          ctx.font = '8px Inter, sans-serif';
+          ctx.fillStyle = color.stroke;
+          ctx.fillText(node.type, node.x, labelY + 12);
+        }
+      }
+
+      ctx.restore();
+    });
+
+    ctx.restore();
+  }, [graphData, selectedId, hoveredId, zoom]);
+
+  useEffect(() => {
+    const id = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(id);
+  }, [draw, pan, zoom, layoutNodes]);
+
+  // Canvas interactions
+  const getWorldPos = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const rect = canvasRef.current!.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left - pan.x) / zoom,
+      y: (e.clientY - rect.top - pan.y) / zoom,
+    };
   };
 
-  const handleNodeClick = (node: GraphNode) => {
-    setSelectedNode(node);
-    setAiResult(null);
+  const findNodeAt = (wx: number, wy: number): LayoutNode | null => {
+    for (let i = layoutNodes.length - 1; i >= 0; i--) {
+      const n = layoutNodes[i];
+      if (Math.hypot(n.x - wx, n.y - wy) <= n.radius + 6) return n;
+    }
+    return null;
   };
 
-  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 0.15, 1.8));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 0.15, 0.5));
-  const handleResetZoom = () => setZoomLevel(1);
+  const onMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const { x, y } = getWorldPos(e);
+    const hit = findNodeAt(x, y);
+    if (hit) {
+      setDragging({ nodeId: hit.id, canvas: false });
+    } else {
+      setDragging({ nodeId: null, canvas: true });
+      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    }
+  };
 
-  const runAiAnalysisOnNode = async () => {
+  const onMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const { x, y } = getWorldPos(e);
+
+    if (dragging.nodeId) {
+      setLayoutNodes(prev =>
+        prev.map(n => n.id === dragging.nodeId ? { ...n, x, y, fx: x, fy: y } : n)
+      );
+      return;
+    }
+    if (dragging.canvas) {
+      setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
+      return;
+    }
+
+    const hit = findNodeAt(x, y);
+    setHoveredId(hit?.id ?? null);
+    if (canvasRef.current) {
+      canvasRef.current.style.cursor = hit ? 'pointer' : 'grab';
+    }
+  };
+
+  const onMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (dragging.nodeId) {
+      const { x, y } = getWorldPos(e);
+      const hit = findNodeAt(x, y);
+      if (hit && dragging.nodeId === hit.id) {
+        setSelectedId(prev => prev === hit.id ? null : hit.id);
+        setAiResult(null);
+      }
+      // Release pin
+      setLayoutNodes(prev =>
+        prev.map(n => n.id === dragging.nodeId ? { ...n, fx: null, fy: null } : n)
+      );
+    }
+    setDragging({ nodeId: null, canvas: false });
+  };
+
+  const onWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    setZoom(prev => Math.max(0.25, Math.min(3, prev - e.deltaY * 0.001)));
+  };
+
+  // Fit graph to screen
+  const fitGraph = () => {
+    if (!layoutNodes.length) return;
+    const xs = layoutNodes.map(n => n.x);
+    const ys = layoutNodes.map(n => n.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cw = canvas.clientWidth;
+    const ch = canvas.clientHeight;
+    const scale = Math.min(
+      cw / (maxX - minX + 120),
+      ch / (maxY - minY + 120),
+      2.5,
+    );
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    setZoom(scale);
+    setPan({ x: cw / 2 - cx * scale, y: ch / 2 - cy * scale });
+  };
+
+  // AI Analysis
+  const selectedNode = selectedId ? layoutNodes.find(n => n.id === selectedId) : null;
+
+  const runAiAnalysis = async () => {
+    if (!selectedNode) return;
     setAiAnalyzing(true);
     setAiResult(null);
     try {
-      // Call real backend POST /api/v1/chat
-      const data = await sendMessage({
-        query: `Perform node-level compliance audit for ${activeNode.label} (${activeNode.type}). Sensitivity: ${activeNode.properties?.sensitivity}. Status: ${activeNode.status || 'Active'}.`,
-        top_k: 3,
+      const res = await sendMessage({
+        query: `Perform compliance analysis for entity "${selectedNode.name}" (type: ${selectedNode.type}). Assess compliance posture, risk factors, and provide actionable recommendations.`,
+        top_k: 5,
       });
-      setAiResult(data.answer || 'No analysis result returned.');
-    } catch (err) {
-      setAiResult('Analysis error: Could not connect to compliance engine. Please check backend is running.');
+      setAiResult(res.answer || 'No analysis returned from the AI engine.');
+    } catch {
+      setAiResult('Analysis error: Could not connect to the compliance engine. Please ensure the backend is running.');
     } finally {
       setAiAnalyzing(false);
     }
   };
 
-  const getNodeIcon = (type: GraphNode['type']) => {
-    switch (type) {
-      case 'Department':
-        return 'corporate_fare';
-      case 'Policy':
-        return 'policy';
-      case 'Regulation':
-        return 'gavel';
-      case 'Risk':
-        return 'warning';
-      case 'Audit':
-        return 'fact_check';
-      default:
-        return 'hub';
-    }
-  };
+  // Search filter
+  const searchResults = useMemo(() => {
+    if (!search.trim()) return [];
+    const q = search.toLowerCase();
+    return layoutNodes.filter(n =>
+      n.name?.toLowerCase().includes(q) || n.type?.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [search, layoutNodes]);
 
-  const getNodeColorClass = (type: GraphNode['type']) => {
-    switch (type) {
-      case 'Department':
-        return {
-          border: 'border-primary/50 shadow-primary/10',
-          bg: 'bg-primary/20',
-          text: 'text-primary',
-          dot: 'bg-primary',
-        };
-      case 'Policy':
-        return {
-          border: 'border-tertiary/50 shadow-tertiary/10',
-          bg: 'bg-tertiary/20',
-          text: 'text-tertiary',
-          dot: 'bg-tertiary',
-        };
-      case 'Regulation':
-        return {
-          border: 'border-secondary/50 shadow-secondary/10',
-          bg: 'bg-secondary/20',
-          text: 'text-secondary',
-          dot: 'bg-secondary',
-        };
-      case 'Risk':
-        return {
-          border: 'border-error/50 shadow-error/10',
-          bg: 'bg-error/20',
-          text: 'text-error',
-          dot: 'bg-error',
-        };
-      case 'Audit':
-        return {
-          border: 'border-primary-container/50 shadow-primary-container/10',
-          bg: 'bg-primary-container/20',
-          text: 'text-primary-container',
-          dot: 'bg-primary-container',
-        };
-      default:
-        return {
-          border: 'border-outline/50 shadow-outline/10',
-          bg: 'bg-outline/20',
-          text: 'text-on-surface',
-          dot: 'bg-primary',
-        };
-    }
-  };
+  // Connected edges for selected node
+  const selectedEdges = useMemo(() => {
+    if (!selectedId) return [];
+    return (graphData?.edges ?? []).filter(e => e.source === selectedId || e.target === selectedId);
+  }, [selectedId, graphData]);
+
+  const nodeCount = graphStats?.node_count ?? graphData?.nodes?.length ?? 0;
+  const edgeCount = graphStats?.relationship_count ?? graphData?.edges?.length ?? 0;
+  const isEmpty = !isLoading && nodeCount === 0;
 
   return (
-    <div className="h-[calc(100vh-64px)] -m-8 flex relative overflow-hidden select-none animate-in fade-in duration-300">
-      {/* Canvas Area */}
-      <div className="flex-1 canvas-grid relative overflow-hidden bg-background" id="graph-canvas">
-        {/* Transform container for zoom */}
-        <div
-          className="w-full h-full relative transition-transform duration-200"
-          style={{ transform: `scale(${zoomLevel})`, transformOrigin: 'center center' }}
-        >
-          {/* SVG Graph Connections */}
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-10">
-            <defs>
-              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="rgba(173, 198, 255, 0.5)" />
-              </marker>
-            </defs>
+    <div className="h-[calc(100vh-64px)] -m-8 flex flex-col bg-slate-900 text-slate-100 overflow-hidden">
 
-            {/* Edge lines connecting nodes */}
-            <path d="M 400 100 Q 550 240 650 380" fill="none" stroke="rgba(208, 188, 255, 0.4)" strokeWidth="2" markerEnd="url(#arrowhead)" className="edge-flow" />
-            <path d="M 340 260 Q 500 320 650 380" fill="none" stroke="rgba(173, 198, 255, 0.4)" strokeWidth="2" markerEnd="url(#arrowhead)" className="edge-flow" />
-            <path d="M 340 260 Q 380 420 450 580" fill="none" stroke="rgba(255, 180, 171, 0.4)" strokeWidth="2" markerEnd="url(#arrowhead)" className="edge-flow" />
-            <path d="M 450 580 Q 600 600 720 630" fill="none" stroke="rgba(78, 222, 163, 0.4)" strokeWidth="2" markerEnd="url(#arrowhead)" className="edge-flow" />
-          </svg>
+      {/* ── Top Header Bar ── */}
+      <div className="flex items-center justify-between px-5 py-2.5 bg-slate-800/90 border-b border-slate-700/60 backdrop-blur-md z-20 shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400">
+            <span className="material-symbols-outlined text-lg">hub</span>
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-slate-100 leading-tight">Knowledge Graph Explorer</h1>
+            <p className="text-[10px] text-slate-400">Neo4j • Force-Directed Layout • Graph RAG</p>
+          </div>
+        </div>
 
-          {/* Render Nodes */}
-          {initialNodes.map((node) => {
-            const style = getNodeColorClass(node.type);
-            const isSelected = activeNode.id === node.id;
+        {/* Stats */}
+        <div className="flex items-center gap-3 font-mono text-xs">
+          {[
+            { label: 'Nodes', value: nodeCount, color: 'text-blue-400' },
+            { label: 'Relationships', value: edgeCount, color: 'text-purple-400' },
+            { label: 'Avg Degree', value: graphStats?.average_degree?.toFixed(1) ?? '0', color: 'text-emerald-400' },
+            { label: 'Density', value: graphStats?.graph_density?.toFixed(4) ?? '0', color: 'text-amber-400' },
+          ].map(s => (
+            <div key={s.label} className="flex items-center gap-1.5 bg-slate-900/60 px-3 py-1.5 rounded-xl border border-slate-700">
+              <span className="text-slate-400 font-sans text-[10px]">{s.label}:</span>
+              <span className={`font-bold text-xs ${s.color}`}>{s.value}</span>
+            </div>
+          ))}
+        </div>
 
-            return (
-              <div
-                key={node.id}
-                onClick={() => handleNodeClick(node)}
-                className="absolute z-20 cursor-pointer"
-                style={{ top: `${node.y}px`, left: `${node.x}px` }}
-              >
-                <div
-                  className={`glass-panel px-4 py-3 rounded-2xl flex items-center gap-3 ${style.border} shadow-xl hover:scale-105 transition-all ${
-                    isSelected ? 'ring-2 ring-primary bg-surface-container-highest/80' : ''
-                  }`}
+        {/* Search */}
+        <div className="relative">
+          <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">search</span>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search nodes…"
+            className="w-48 bg-slate-700/60 border border-slate-600 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+          />
+          {searchResults.length > 0 && (
+            <div className="absolute right-0 top-full mt-1 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+              {searchResults.map(n => (
+                <button
+                  key={n.id}
+                  onClick={() => {
+                    setSelectedId(n.id);
+                    setSearch('');
+                    // Pan to node
+                    const canvas = canvasRef.current;
+                    if (canvas) {
+                      setPan({ x: canvas.clientWidth / 2 - n.x * zoom, y: canvas.clientHeight / 2 - n.y * zoom });
+                    }
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-700 transition-colors text-left"
                 >
-                  <div className={`w-10 h-10 rounded-full ${style.bg} flex items-center justify-center ${style.text}`}>
-                    <span className="material-symbols-outlined">{getNodeIcon(node.type)}</span>
+                  <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: getColor(n.type).fill }}>
+                    <span className="material-symbols-outlined text-white" style={{ fontSize: 12 }}>{getIcon(n.type)}</span>
                   </div>
-                  <div>
-                    <div className={`text-[10px] uppercase font-bold tracking-widest leading-none mb-1 opacity-75 ${style.text}`}>
-                      {node.type}
-                    </div>
-                    <div className="font-bold text-sm text-on-surface">{node.label}</div>
+                  <div className="overflow-hidden">
+                    <div className="text-xs font-bold text-slate-100 truncate">{n.name}</div>
+                    <div className="text-[10px] text-slate-400">{n.type}</div>
                   </div>
-                  {node.status && (
-                    <div className={`w-2.5 h-2.5 rounded-full ${style.dot} node-pulse ml-2`}></div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Floating Graph Toolbar */}
-        <div className="absolute bottom-8 left-8 flex flex-col gap-2 z-20">
-          <div className="glass-panel rounded-xl p-1 flex flex-col gap-1 shadow-lg border border-outline-variant/30">
-            <button
-              onClick={handleZoomIn}
-              className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer text-on-surface"
-              title="Zoom In"
-            >
-              <span className="material-symbols-outlined">add</span>
-            </button>
-            <button
-              onClick={handleZoomOut}
-              className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer text-on-surface"
-              title="Zoom Out"
-            >
-              <span className="material-symbols-outlined">remove</span>
-            </button>
-          </div>
-
-          <div className="glass-panel rounded-xl p-1 flex flex-col gap-1 shadow-lg border border-outline-variant/30">
-            <button
-              onClick={handleResetZoom}
-              className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-surface-container-highest transition-colors cursor-pointer text-on-surface"
-              title="Fit to Screen"
-            >
-              <span className="material-symbols-outlined">fit_screen</span>
-            </button>
-            <button
-              onClick={() => setPanMode(!panMode)}
-              className={`w-10 h-10 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
-                panMode ? 'bg-primary text-on-primary' : 'hover:bg-surface-container-highest text-on-surface'
-              }`}
-              title="Toggle Pan Tool"
-            >
-              <span className="material-symbols-outlined">pan_tool</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Mini Map */}
-        <div className="absolute bottom-8 right-8 w-48 h-32 glass-panel rounded-xl overflow-hidden z-20 border border-primary/20 shadow-xl hidden sm:block">
-          <div className="w-full h-full bg-surface-container-low opacity-60 relative p-2">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-7 border border-primary rounded-sm bg-primary/20"></div>
-            {/* Tiny dots */}
-            <div className="w-1.5 h-1.5 rounded-full bg-primary absolute top-4 left-8"></div>
-            <div className="w-1.5 h-1.5 rounded-full bg-secondary absolute top-8 left-20"></div>
-            <div className="w-1.5 h-1.5 rounded-full bg-tertiary absolute bottom-6 right-12"></div>
-          </div>
-          <div className="absolute bottom-2 left-2 text-[9px] uppercase font-bold tracking-widest text-on-surface-variant/80">
-            Minimap
-          </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Entity Details Inspector Panel (Right Sidebar) */}
-      <aside className="w-[340px] h-full bg-surface-container-low border-l border-outline-variant/30 flex flex-col z-30 overflow-y-auto">
-        <div className="p-6 border-b border-outline-variant/20 bg-surface-container/50">
-          <div className="flex justify-between items-start mb-4">
-            <div className="w-12 h-12 rounded-xl bg-tertiary/10 flex items-center justify-center text-tertiary border border-tertiary/20">
-              <span className="material-symbols-outlined text-2xl">{getNodeIcon(activeNode.type)}</span>
+      {/* ── Main Content ── */}
+      <div className="flex-1 flex overflow-hidden">
+
+        {/* ── Canvas ── */}
+        <div className="flex-1 relative overflow-hidden">
+          {isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 z-30">
+              <div className="w-12 h-12 rounded-full border-3 border-blue-500/30 border-t-blue-500 animate-spin mb-4" />
+              <p className="text-slate-400 text-sm">Loading Knowledge Graph…</p>
             </div>
-            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-surface-container-highest text-outline">
-              ID: {activeNode.id}
-            </span>
-          </div>
+          )}
 
-          <h2 className="font-headline-md text-xl font-bold text-on-surface mb-2">{activeNode.label}</h2>
-
-          <div className="flex gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-tertiary/10 text-tertiary text-[10px] font-bold border border-tertiary/20">
-              {activeNode.status || 'Active'}
-            </span>
-            {activeNode.version && (
-              <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant text-[10px] font-bold border border-outline-variant/20 font-mono">
-                {activeNode.version}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex-1 p-6 space-y-6">
-          {/* Properties */}
-          <section>
-            <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">list</span> Properties
-            </h3>
-            <div className="space-y-2.5 bg-surface-container-lowest/60 p-3.5 rounded-xl border border-outline-variant/20">
-              <div className="flex justify-between text-xs">
-                <span className="text-on-surface-variant">Owner</span>
-                <span className="font-medium text-on-surface">{activeNode.properties?.owner || 'Unassigned'}</span>
+          {isEmpty && !isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+              <div className="w-20 h-20 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-4xl text-slate-500">hub</span>
               </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-on-surface-variant">Last Reviewed</span>
-                <span className="font-medium text-on-surface">{activeNode.properties?.lastReviewed || 'N/A'}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-on-surface-variant">Sensitivity</span>
-                <span
-                  className={`font-bold ${
-                    activeNode.properties?.sensitivity === 'Critical' || activeNode.properties?.sensitivity === 'High'
-                      ? 'text-error'
-                      : 'text-tertiary'
-                  }`}
-                >
-                  {activeNode.properties?.sensitivity || 'Normal'}
-                </span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-on-surface-variant">Data Locality</span>
-                <span className="font-medium text-on-surface">{activeNode.properties?.dataLocality || 'Global'}</span>
-              </div>
+              <h3 className="text-slate-400 font-bold mb-2">No Graph Data Available</h3>
+              <p className="text-slate-500 text-xs text-center max-w-xs">
+                Neo4j is unavailable or the graph is empty. Upload documents to populate the knowledge graph.
+              </p>
             </div>
-          </section>
+          )}
 
-          {/* Relationships */}
-          <section>
-            <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">hub</span> Relationships ({activeNode.relationships?.length || 0})
-            </h3>
-            <div className="space-y-2">
-              {activeNode.relationships?.map((rel, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => {
-                    const target = initialNodes.find((n) => n.id === rel.targetId);
-                    if (target) setSelectedNode(target);
-                  }}
-                  className="p-3 glass-panel rounded-xl flex items-center gap-3 cursor-pointer hover:bg-surface-container-highest transition-colors border border-outline-variant/20"
+          <canvas
+            ref={canvasRef}
+            className="w-full h-full"
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={() => { setHoveredId(null); setDragging({ nodeId: null, canvas: false }); }}
+            onWheel={onWheel}
+          />
+
+          {/* Zoom controls */}
+          <div className="absolute bottom-5 left-5 flex flex-col gap-1.5 z-20">
+            <div className="bg-slate-800/90 border border-slate-700 rounded-xl p-1 flex flex-col gap-0.5 shadow-xl">
+              {[
+                { icon: 'add', action: () => setZoom(p => Math.min(p + 0.2, 3)), title: 'Zoom In' },
+                { icon: 'remove', action: () => setZoom(p => Math.max(p - 0.2, 0.25)), title: 'Zoom Out' },
+                { icon: 'fit_screen', action: fitGraph, title: 'Fit to Screen' },
+                { icon: 'refresh', action: () => { setPan({ x: 0, y: 0 }); setZoom(1); }, title: 'Reset View' },
+              ].map(btn => (
+                <button
+                  key={btn.icon}
+                  onClick={btn.action}
+                  title={btn.title}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-700 transition-colors"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-sm">
-                    <span className="material-symbols-outlined text-base">corporate_fare</span>
-                  </div>
-                  <div className="flex-1 overflow-hidden">
-                    <div className="text-[9px] text-on-surface-variant font-mono font-bold uppercase tracking-wider">
-                      {rel.type}
-                    </div>
-                    <div className="text-xs font-bold text-on-surface truncate">{rel.targetLabel}</div>
-                  </div>
-                  <span className="material-symbols-outlined text-sm text-outline">chevron_right</span>
-                </div>
+                  <span className="material-symbols-outlined text-lg">{btn.icon}</span>
+                </button>
               ))}
             </div>
-          </section>
+            <div className="bg-slate-800/90 border border-slate-700 rounded-xl px-2 py-1 text-center font-mono text-[10px] text-slate-400 shadow-xl">
+              {Math.round(zoom * 100)}%
+            </div>
+          </div>
 
-          {/* Source Documents */}
-          <section>
-            <h3 className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-3 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-sm">description</span> Source Documents
-            </h3>
-            {activeNode.sourceDocs?.map((doc, idx) => (
-              <div
-                key={idx}
-                className="p-3.5 rounded-xl border border-outline-variant/20 bg-surface-container-lowest flex items-start gap-3"
-              >
-                <span className="material-symbols-outlined text-primary text-xl">picture_as_pdf</span>
-                <div className="flex-1">
-                  <div className="text-xs font-bold text-on-surface truncate">{doc.name}</div>
-                  <div className="text-[10px] text-on-surface-variant mt-0.5 font-mono">
-                    PDF • {doc.size} • Updated {doc.updated}
-                  </div>
-                  <div className="mt-2.5 flex gap-2">
-                    <button className="px-3 py-1 bg-primary text-on-primary text-[10px] font-bold rounded-lg hover:opacity-90 transition-opacity cursor-pointer">
-                      View
-                    </button>
-                    <button className="px-3 py-1 bg-surface-container-highest text-on-surface text-[10px] font-bold rounded-lg hover:bg-surface-container-high transition-colors cursor-pointer">
-                      Verify
-                    </button>
-                  </div>
+          {/* Legend */}
+          {!isEmpty && (
+            <div className="absolute top-3 left-3 bg-slate-800/90 border border-slate-700 rounded-xl p-3 z-20 shadow-xl max-w-[140px]">
+              <p className="text-[9px] uppercase font-bold text-slate-500 tracking-wider mb-2">Legend</p>
+              {Object.entries(TYPE_COLOR).slice(0, 6).map(([type, color]) => (
+                <div key={type} className="flex items-center gap-1.5 mb-1">
+                  <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color.fill }} />
+                  <span className="text-[9px] text-slate-400">{type}</span>
                 </div>
-              </div>
-            ))}
-          </section>
-
-          {/* AI Analysis Result */}
-          {aiResult && (
-            <div className="p-4 bg-primary-container/10 border border-primary/30 rounded-xl space-y-2 animate-in fade-in">
-              <div className="flex items-center gap-1.5 text-primary text-xs font-bold">
-                <span className="material-symbols-outlined fill text-sm">auto_awesome</span>
-                AI Compliance Analysis
-              </div>
-              <p className="text-xs text-on-surface leading-relaxed whitespace-pre-line">{aiResult}</p>
+              ))}
             </div>
           )}
         </div>
 
-        {/* AI Analysis Trigger Footer */}
-        <div className="p-6 border-t border-outline-variant/20 bg-surface-container/50">
-          <button
-            onClick={runAiAnalysisOnNode}
-            disabled={aiAnalyzing}
-            className="w-full py-3 bg-primary text-on-primary rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-primary/20 cursor-pointer disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-lg fill">
-              {aiAnalyzing ? 'sync' : 'psychology'}
-            </span>
-            {aiAnalyzing ? 'Analyzing Node with Groq AI…' : 'AI Analysis'}
-          </button>
-        </div>
-      </aside>
+        {/* ── Right Panel ── */}
+        <aside className="w-72 bg-slate-800/95 border-l border-slate-700/60 flex flex-col overflow-y-auto shrink-0">
 
-      {/* Floating AI Insights FAB */}
-      <div className="fixed bottom-8 right-[360px] z-40 group">
-        <div className="absolute -top-12 left-1/2 -translate-x-1/2 bg-surface-container-highest text-on-surface text-[10px] px-3 py-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap border border-outline-variant/30 pointer-events-none shadow-xl">
-          3 AI Insights Available
-        </div>
-        <button
-          onClick={runAiAnalysisOnNode}
-          className="w-13 h-13 rounded-full bg-secondary text-on-secondary shadow-2xl flex items-center justify-center hover:scale-110 active:scale-90 transition-all cursor-pointer"
-        >
-          <span className="material-symbols-outlined text-2xl fill">bolt</span>
-        </button>
+          {/* Node Header */}
+          <div className="p-4 border-b border-slate-700/60 bg-slate-900/40">
+            <div className="flex items-center justify-between mb-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: selectedNode ? getColor(selectedNode.type).fill + '33' : '#1e293b', border: `1px solid ${selectedNode ? getColor(selectedNode.type).stroke + '66' : '#334155'}` }}
+              >
+                <span className="material-symbols-outlined text-xl" style={{ color: selectedNode ? getColor(selectedNode.type).stroke : '#64748b' }}>
+                  {selectedNode ? getIcon(selectedNode.type) : 'touch_app'}
+                </span>
+              </div>
+              {selectedNode && (
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-700 text-slate-400">
+                  ID: {selectedNode.id.slice(0, 14)}{selectedNode.id.length > 14 ? '…' : ''}
+                </span>
+              )}
+            </div>
+
+            <h2 className="font-bold text-sm text-slate-100 leading-tight truncate mb-1">
+              {selectedNode ? selectedNode.name : 'No Node Selected'}
+            </h2>
+            {selectedNode && (
+              <span
+                className="text-[10px] px-2 py-0.5 rounded-full font-bold"
+                style={{ backgroundColor: getColor(selectedNode.type).fill + '33', color: getColor(selectedNode.type).stroke }}
+              >
+                {selectedNode.type}
+              </span>
+            )}
+            {!selectedNode && (
+              <p className="text-[11px] text-slate-500 mt-1">Click any node on the graph to inspect it</p>
+            )}
+          </div>
+
+          {selectedNode && (
+            <div className="flex-1 p-4 space-y-4 overflow-y-auto">
+
+              {/* Properties */}
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">list</span> Properties
+                </h3>
+                <div className="bg-slate-900/50 rounded-xl border border-slate-700/50 divide-y divide-slate-700/40">
+                  {[
+                    ['Degree', selectedNode.degree],
+                    ['Confidence', selectedNode.properties?.confidence !== undefined ? `${Math.round(Number(selectedNode.properties.confidence) * 100)}%` : 'N/A'],
+                    ['Owner', selectedNode.properties?.owner || 'N/A'],
+                    ['Risk Level', selectedNode.properties?.risk_level || selectedNode.properties?.sensitivity || 'N/A'],
+                    ['Data Locality', selectedNode.properties?.data_locality || 'N/A'],
+                    ['Created', selectedNode.properties?.created_at ? String(selectedNode.properties.created_at).slice(0, 10) : 'N/A'],
+                  ].map(([k, v]) => (
+                    <div key={String(k)} className="flex justify-between items-center px-3 py-2 text-[11px]">
+                      <span className="text-slate-400">{k}</span>
+                      <span className="font-medium text-slate-200 text-right max-w-[130px] truncate">{String(v)}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* Relationships */}
+              <section>
+                <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm">hub</span>
+                  Relationships ({selectedEdges.length})
+                </h3>
+                {selectedEdges.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 px-1">No relationships found</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                    {selectedEdges.map((e, i) => {
+                      const isOutgoing = e.source === selectedId;
+                      const otherId = isOutgoing ? e.target : e.source;
+                      const otherNode = layoutNodes.find(n => n.id === otherId);
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => { setSelectedId(otherId); setAiResult(null); }}
+                          className="w-full flex items-center gap-2.5 p-2.5 bg-slate-900/50 rounded-xl border border-slate-700/40 hover:border-slate-600 hover:bg-slate-700/30 transition-all text-left"
+                        >
+                          <div className="w-6 h-6 rounded-full flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: otherNode ? getColor(otherNode.type).fill + '33' : '#1e293b', border: `1px solid ${otherNode ? getColor(otherNode.type).stroke + '66' : '#334155'}` }}>
+                            <span className="material-symbols-outlined text-xs"
+                              style={{ color: otherNode ? getColor(otherNode.type).stroke : '#64748b', fontSize: 11 }}>
+                              {otherNode ? getIcon(otherNode.type) : 'circle'}
+                            </span>
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                              {isOutgoing ? (
+                                <><span className="text-emerald-400">→</span> {e.type}</>
+                              ) : (
+                                <><span className="text-blue-400">←</span> {e.type}</>
+                              )}
+                            </div>
+                            <div className="text-[11px] font-medium text-slate-200 truncate">
+                              {otherNode?.name || otherId}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              {/* Source Documents */}
+              {Array.isArray(selectedNode.properties?.source_documents) && (selectedNode.properties!.source_documents as string[]).length > 0 && (
+                <section>
+                  <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-sm">description</span> Source Documents
+                  </h3>
+                  <div className="space-y-1.5">
+                    {(selectedNode.properties!.source_documents as string[]).map((doc, i) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-900/50 rounded-xl border border-slate-700/40 text-[11px]">
+                        <span className="material-symbols-outlined text-red-400 text-base">picture_as_pdf</span>
+                        <span className="text-slate-300 truncate font-medium">{doc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* AI Result */}
+              {aiResult && (
+                <div className="bg-blue-900/20 border border-blue-700/40 rounded-xl p-3 animate-in fade-in">
+                  <div className="flex items-center gap-1.5 text-blue-400 text-[10px] font-bold mb-2">
+                    <span className="material-symbols-outlined text-sm fill">auto_awesome</span>
+                    AI Compliance Analysis
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed whitespace-pre-wrap">{aiResult}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI Analysis Button */}
+          <div className="p-4 border-t border-slate-700/60 shrink-0">
+            <button
+              onClick={runAiAnalysis}
+              disabled={aiAnalyzing || !selectedNode}
+              className="w-full py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background: selectedNode ? 'linear-gradient(135deg, #3b82f6, #6366f1)' : undefined,
+                backgroundColor: selectedNode ? undefined : '#1e293b',
+                color: selectedNode ? '#fff' : '#64748b',
+              }}
+            >
+              <span className={`material-symbols-outlined text-base fill ${aiAnalyzing ? 'animate-spin' : ''}`}>
+                {aiAnalyzing ? 'sync' : 'psychology'}
+              </span>
+              {aiAnalyzing ? 'Analyzing with Graph RAG…' : selectedNode ? 'AI Analysis' : 'Select a node first'}
+            </button>
+          </div>
+        </aside>
       </div>
     </div>
   );
