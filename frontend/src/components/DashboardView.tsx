@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { NavigationTab } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useGraphStats } from '../hooks/useGraph';
+import { useProjects } from '../hooks/useProjects';
+import { useGenerateReport, downloadReportPdf } from '../hooks/useReport';
 
 interface DashboardViewProps {
   onNavigate: (tab: NavigationTab) => void;
@@ -23,6 +25,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
   });
 
   const { data: graphStats, isLoading } = useGraphStats();
+  const { data: projects } = useProjects();
+  const generateReportMutation = useGenerateReport();
 
   const kpis = [
     {
@@ -95,27 +99,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
       if (selectedSections.insights) {
         csvContent += 'CRITICAL AI COMPLIANCE INSIGHTS\n';
         csvContent += 'Category,Title,Description\n';
-        csvContent += '"Relational Pattern","Pattern Detected","New connection between Entity X and ISO-27001 suggests 15% risk increase in section 4.2."\n';
-        csvContent += '"Efficiency","Extraction Efficiency","OCR accuracy improved by 4.2% following model fine-tuning."\n';
-        csvContent += '"Data Leak Alert","Potential Leak","Unstructured data in Shared_Drive_A contains 14 unmasked PII instances."\n';
-        csvContent += '"Knowledge Base","Expansion","Graph density reached a new threshold. Recommendation: Prune redundant links."\n\n';
+        csvContent += '"Relational Pattern","Pattern Detected","Knowledge Graph node relationships active across compliance framework definitions."\n';
+        csvContent += '"Efficiency","Extraction Efficiency","OCR accuracy and entity parsing operating with high confidence."\n';
+        csvContent += '"Data Governance","Compliance Check","All uploaded document nodes indexed into vector store and graph."\n';
+        csvContent += '"Knowledge Base","Expansion","Graph density threshold monitored for entity relationships."\n\n';
       }
 
       if (selectedSections.pipeline) {
         csvContent += 'EXTRACTION PIPELINE LOGS\n';
         csvContent += 'Batch/Event,Timestamp,Status/Details\n';
-        csvContent += '"Legal_Corp_2024.zip","Just now","OCR Phase: 67% complete • 1,422 entities found"\n';
-        csvContent += '"Relationship Mapping","12 min ago","Linked 452 new nodes to master compliance graph"\n';
-        csvContent += '"Security Audit","1 hour ago","Manual review required for 3 document classifications"\n\n';
+        csvContent += '"Ingestion Pipeline","Active","Document processing and entity extraction complete."\n';
+        csvContent += '"Relationship Mapping","Recent","Linked entity nodes to master compliance graph."\n\n';
       }
 
       if (selectedSections.entities) {
         csvContent += 'ENTITY DISTRIBUTION BREAKDOWN\n';
-        csvContent += 'Entity Type,Percentage,Count\n';
-        csvContent += '"Persons",45%,18945\n';
-        csvContent += '"Organizations",30%,12630\n';
-        csvContent += '"Locations",15%,6315\n';
-        csvContent += '"Other Categories",10%,4210\n';
+        csvContent += 'Entity Type,Count\n';
+        if (graphStats?.entity_types) {
+          Object.entries(graphStats.entity_types).forEach(([type, count]) => {
+            csvContent += `"${type}",${count}\n`;
+          });
+        }
       }
 
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -135,128 +139,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
     }, 600);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     setIsExporting(true);
-    setTimeout(() => {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        alert('Please allow popups to generate the PDF report.');
-        setIsExporting(false);
-        return;
-      }
-
-      const reportHtml = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Enterprise AI Compliance Report</title>
-          <style>
-            body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1a1a1a; background: #fff; line-height: 1.5; }
-            .header { border-bottom: 2px solid #00285d; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-            .title { font-size: 24px; font-weight: bold; color: #00285d; margin: 0; }
-            .subtitle { font-size: 12px; color: #666; margin-top: 4px; }
-            .badge { background: #e8f0fe; color: #1a73e8; padding: 4px 12px; border-radius: 12px; font-weight: bold; font-size: 12px; }
-            .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }
-            .card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; background: #fafafa; }
-            .card-title { font-size: 11px; text-transform: uppercase; color: #666; font-weight: bold; }
-            .card-val { font-size: 22px; font-weight: bold; color: #00285d; margin-top: 5px; }
-            .section { margin-bottom: 30px; }
-            .section-title { font-size: 16px; font-weight: bold; color: #00285d; border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 15px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
-            th, td { border: 1px solid #e0e0e0; padding: 10px; text-align: left; }
-            th { background: #f0f4f9; font-weight: bold; color: #333; }
-            .risk-flag { color: #d93025; font-weight: bold; }
-            .footer { font-size: 10px; color: #888; text-align: center; margin-top: 50px; border-top: 1px solid #eee; padding-top: 15px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div>
-              <h1 class="title">Enterprise AI Compliance Engine</h1>
-              <div class="subtitle">Executive Compliance & Risk Knowledge Audit Report</div>
-            </div>
-            <div class="badge">CONFIDENTIAL • AUDIT GRADE</div>
-          </div>
-
-          <p><strong>Generated:</strong> ${new Date().toLocaleString()} | <strong>Auditor Access:</strong> Admin / John Doe</p>
-
-          ${
-            selectedSections.kpis
-              ? `
-            <div class="section">
-              <div class="section-title">1. System Overview Metrics</div>
-              <div class="grid">
-                <div class="card"><div class="card-title">Total Documents</div><div class="card-val">1,248</div></div>
-                <div class="card"><div class="card-title">Entities Extracted</div><div class="card-val">42.1K</div></div>
-                <div class="card"><div class="card-title">Compliance Score</div><div class="card-val">A+ (98%)</div></div>
-                <div class="card"><div class="card-title">Avg Confidence</div><div class="card-val">94.2%</div></div>
-              </div>
-            </div>
-          `
-              : ''
-          }
-
-          ${
-            selectedSections.insights
-              ? `
-            <div class="section">
-              <div class="section-title">2. Critical AI Insights & Risk Audit</div>
-              <table>
-                <thead>
-                  <tr><th>Category</th><th>Risk Level</th><th>Finding Description</th></tr>
-                </thead>
-                <tbody>
-                  <tr><td>Relational Pattern</td><td>Medium</td><td>New connection between 'Entity X' and ISO-27001 standard.</td></tr>
-                  <tr><td>Extraction Efficiency</td><td>Low</td><td>OCR accuracy improved by 4.2% following model training.</td></tr>
-                  <tr><td class="risk-flag">Data Leak Alert</td><td class="risk-flag">CRITICAL</td><td>14 unmasked PII instances identified in Shared_Drive_A. Action Required.</td></tr>
-                  <tr><td>Knowledge Base</td><td>Info</td><td>Graph density threshold reached. Prune recommended.</td></tr>
-                </tbody>
-              </table>
-            </div>
-          `
-              : ''
-          }
-
-          ${
-            selectedSections.entities
-              ? `
-            <div class="section">
-              <div class="section-title">3. Entity Distribution Summary</div>
-              <table>
-                <thead><tr><th>Category</th><th>Percentage</th><th>Node Count</th></tr></thead>
-                <tbody>
-                  <tr><td>Person Identifiers</td><td>45%</td><td>18,945</td></tr>
-                  <tr><td>Organizations</td><td>30%</td><td>12,630</td></tr>
-                  <tr><td>Locations & Locality</td><td>15%</td><td>6,315</td></tr>
-                  <tr><td>Other Metadata</td><td>10%</td><td>4,210</td></tr>
-                </tbody>
-              </table>
-            </div>
-          `
-              : ''
-          }
-
-          <div class="footer">
-            Generated automatically by Enterprise AI Compliance Engine • Powered by Groq AI Knowledge Graph Logic
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            }
-          </script>
-        </body>
-        </html>
-      `;
-
-      printWindow.document.write(reportHtml);
-      printWindow.document.close();
-
+    try {
+      const targetProjId = projects?.[0]?.id || 'proj_compliance_2026';
+      const report = await generateReportMutation.mutateAsync(targetProjId);
+      await downloadReportPdf(report.id, targetProjId);
       setIsExporting(false);
       setExportModalOpen(false);
-      setExportSuccessMsg('PDF Report document generated. Print/Download dialog launched!');
-      setTimeout(() => setExportSuccessMsg(null), 4000);
-    }, 600);
+      setExportSuccessMsg(`Audit Report '${report.id}' generated & downloaded as PDF. Registered in Compliance Reports!`);
+      setTimeout(() => setExportSuccessMsg(null), 5000);
+    } catch (err: any) {
+      setIsExporting(false);
+      alert(`Report Generation Error: ${err?.message || err}`);
+    }
   };
 
   return (

@@ -21,6 +21,7 @@ from app.api.rag import router as rag_router
 from app.api.graph import router as graph_router
 from app.api.documents import router as documents_router
 from app.api.system import router as system_router
+from app.api.reports import router as reports_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -47,5 +48,7 @@ api_router.include_router(rag_router, prefix="/rag", tags=["Graph RAG Engine"])
 api_router.include_router(graph_router, prefix="/graph", tags=["Knowledge Graph Engine"])
 api_router.include_router(documents_router, prefix="/documents", tags=["Document Management"])
 api_router.include_router(system_router, prefix="/system", tags=["System Health & Diagnostics"])
+api_router.include_router(reports_router, prefix="/reports", tags=["Compliance Audit Reports"])
 
 __all__ = ["api_router"]
+

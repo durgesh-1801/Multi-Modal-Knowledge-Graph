@@ -37,7 +37,7 @@ vector_store = VectorStoreService()
     description="Returns top nodes, active relationship edges, and graph summary metadata.",
 )
 async def get_graph_overview(
-    limit: int = Query(default=50, ge=1, le=500, description="Max nodes to retrieve"),
+    limit: int = Query(default=2000, ge=1, le=10000, description="Max nodes to retrieve"),
     graph_db: AbstractGraphInterface = Depends(get_graph_interface),
     current_user: UserResponse = Depends(require_permission(Permission.VIEW_GRAPH)),
 ) -> StandardResponse[SubgraphResponse]:
@@ -46,8 +46,55 @@ async def get_graph_overview(
     subgraph = graph_db.get_subgraph(query="", depth=2)
     return StandardResponse[SubgraphResponse](
         success=True,
-        message="Knowledge Graph overview retrieved successfully",
+        message=f"Knowledge Graph overview retrieved successfully ({len(subgraph.nodes)} nodes, {len(subgraph.edges)} edges)",
         data=subgraph,
+    )
+
+
+@router.get(
+    "/project/{project_id}",
+    response_model=StandardResponse[dict],
+    status_code=status.HTTP_200_OK,
+    summary="Get Project Knowledge Graph & Statistics",
+    description="Returns nodes, relationships, and statistics for a project.",
+)
+async def get_project_graph(
+    project_id: str,
+    limit: int = Query(default=2000, ge=1, le=10000),
+    graph_db: AbstractGraphInterface = Depends(get_graph_interface),
+    current_user: UserResponse = Depends(require_permission(Permission.VIEW_GRAPH)),
+) -> StandardResponse[dict]:
+    """Retrieves live project graph nodes, relationships, and analytics."""
+    logger.info(f"Retrieving Knowledge Graph for project '{project_id}' (limit={limit})")
+    subgraph = graph_db.get_subgraph(query="", depth=2)
+    stats = graph_db.get_graph_statistics()
+    
+    nodes_data = [
+        {
+            **n.model_dump(),
+            "label": n.name,
+            "framework": n.properties.get("framework", "General Compliance"),
+            "document": n.source_documents[0] if n.source_documents else None,
+            "page": n.page_numbers[0] if n.page_numbers else 1,
+        }
+        for n in subgraph.nodes
+    ]
+    edges_data = [
+        {
+            **e.model_dump(),
+            "relationship": e.type,
+        }
+        for e in subgraph.edges
+    ]
+
+    return StandardResponse[dict](
+        success=True,
+        message=f"Retrieved {len(nodes_data)} nodes and {len(edges_data)} relationships for project '{project_id}'",
+        data={
+            "nodes": nodes_data,
+            "edges": edges_data,
+            "statistics": stats.model_dump(),
+        },
     )
 
 

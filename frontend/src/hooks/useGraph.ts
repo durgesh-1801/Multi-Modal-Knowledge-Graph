@@ -27,23 +27,19 @@ export const DEFAULT_SUBGRAPH_RESPONSE: SubgraphResponse = {
 };
 
 // ─── Full graph overview ──────────────────────────────────────────────────────
-export function useGraphOverview(limit = 50) {
+export function useGraphOverview(limit = 2000) {
   const query = useQuery({
     queryKey: ['graph', 'overview', limit],
     queryFn: async (): Promise<SubgraphResponse> => {
-      try {
-        const res = await apiClient.get<ApiResponse<SubgraphResponse>>('/graph', {
-          params: { limit },
-        });
-        const data = res.data?.data;
-        return {
-          nodes: Array.isArray(data?.nodes) ? data.nodes : [],
-          edges: Array.isArray(data?.edges) ? data.edges : [],
-          metadata: data?.metadata || {},
-        };
-      } catch {
-        return DEFAULT_SUBGRAPH_RESPONSE;
-      }
+      const res = await apiClient.get<ApiResponse<SubgraphResponse>>('/graph', {
+        params: { limit },
+      });
+      const data = res.data?.data;
+      return {
+        nodes: Array.isArray(data?.nodes) ? data.nodes : [],
+        edges: Array.isArray(data?.edges) ? data.edges : [],
+        metadata: data?.metadata || {},
+      };
     },
     retry: 1,
     staleTime: 30_000, // 30 seconds
@@ -52,6 +48,29 @@ export function useGraphOverview(limit = 50) {
   return {
     ...query,
     data: query.data ?? DEFAULT_SUBGRAPH_RESPONSE,
+  };
+}
+
+// ─── Project graph ────────────────────────────────────────────────────────────
+export function useProjectGraph(projectId: string | null, limit = 2000) {
+  const query = useQuery({
+    queryKey: ['graph', 'project', projectId, limit],
+    queryFn: async (): Promise<{ nodes: BackendGraphNode[]; edges: any[]; statistics: GraphStatistics }> => {
+      const targetId = projectId || 'proj_compliance_2026';
+      const res = await apiClient.get<ApiResponse<{ nodes: BackendGraphNode[]; edges: any[]; statistics: GraphStatistics }>>(
+        `/graph/project/${encodeURIComponent(targetId)}`,
+        { params: { limit } }
+      );
+      return res.data?.data || { nodes: [], edges: [], statistics: DEFAULT_GRAPH_STATS };
+    },
+    enabled: true,
+    retry: 1,
+    staleTime: 30_000,
+  });
+
+  return {
+    ...query,
+    data: query.data ?? { nodes: [], edges: [], statistics: DEFAULT_GRAPH_STATS },
   };
 }
 
