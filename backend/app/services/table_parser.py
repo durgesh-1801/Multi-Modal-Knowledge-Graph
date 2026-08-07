@@ -62,15 +62,15 @@ class TableParser:
         try:
             import camelot
 
-            # Try lattice flavor first (for bordered tables)
+            # Target first 20 pages with Camelot to keep table extraction fast and responsive
             camelot_tables = camelot.read_pdf(
-                str(file_path), pages="all", flavor="lattice"
+                str(file_path), pages="1-20", flavor="lattice"
             )
             
             # If lattice flavor yields no tables, attempt stream flavor (for borderless tables)
             if len(camelot_tables) == 0:
                 camelot_tables = camelot.read_pdf(
-                    str(file_path), pages="all", flavor="stream"
+                    str(file_path), pages="1-20", flavor="stream"
                 )
 
             for table in camelot_tables:

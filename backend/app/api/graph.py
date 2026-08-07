@@ -44,6 +44,24 @@ async def get_graph_overview(
     """Retrieves full overview or top-level subgraph of the Knowledge Graph."""
     logger.info(f"Retrieving Knowledge Graph overview (limit={limit})")
     subgraph = graph_db.get_subgraph(query="", depth=2)
+    
+    # Filter overview payload to top connected nodes and valid edges
+    if len(subgraph.nodes) > limit:
+        deg_map = {}
+        for e in subgraph.edges:
+            deg_map[e.source.lower()] = deg_map.get(e.source.lower(), 0) + 1
+            deg_map[e.target.lower()] = deg_map.get(e.target.lower(), 0) + 1
+        
+        # Rank by connection degree (connected entities first)
+        subgraph.nodes.sort(key=lambda n: deg_map.get(n.id.lower(), 0), reverse=True)
+        subgraph.nodes = subgraph.nodes[:limit]
+        
+        valid_node_ids = {n.id.lower() for n in subgraph.nodes}
+        subgraph.edges = [
+            e for e in subgraph.edges 
+            if e.source.lower() in valid_node_ids and e.target.lower() in valid_node_ids
+        ]
+
     return StandardResponse[SubgraphResponse](
         success=True,
         message="Knowledge Graph overview retrieved successfully",

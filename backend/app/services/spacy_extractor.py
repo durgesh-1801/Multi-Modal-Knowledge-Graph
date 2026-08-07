@@ -81,7 +81,10 @@ class SpacyExtractor:
 
         if nlp != "FALLBACK" and hasattr(nlp, "pipe"):
             try:
-                doc = nlp(text)
+                # Cap input text to top 100k chars & enable only NER pipe to boost performance
+                target_text = text[:100000]
+                with nlp.select_pipes(enable=["ner"]):
+                    doc = nlp(target_text)
                 for ent in doc.ents:
                     entity_type = self.SPACY_TYPE_MAP.get(ent.label_, ent.label_)
                     name = ent.text.strip()

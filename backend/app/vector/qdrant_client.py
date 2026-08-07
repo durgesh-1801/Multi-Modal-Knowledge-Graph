@@ -201,7 +201,9 @@ class QdrantClientManager:
                 qmodels.PointStruct(id=pid, vector=vec, payload=pload)
                 for pid, vec, pload in zip(ids, vectors, payloads)
             ]
-            client.upsert(collection_name=collection_name, points=points)
+            batch_size = 250
+            for i in range(0, len(points), batch_size):
+                client.upsert(collection_name=collection_name, points=points[i : i + batch_size])
             logger.info(f"Upserted {len(points)} vector points into collection '{collection_name}'.")
             return True
         except Exception as err:
