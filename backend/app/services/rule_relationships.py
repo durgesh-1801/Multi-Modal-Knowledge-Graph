@@ -86,18 +86,28 @@ class RuleRelationshipExtractor:
         logger.info("Executing Stage 1: Rule-Based & Linguistic Relationship Extraction.")
         relationships: List[Relationship] = []
 
-        # Split text into sentence clauses
-        sentences = re.split(r"[.!?\n]+", text)
+        # Deduplicate and cap entities to top 150 distinct non-empty names
+        ent_map = {}
+        for ent in entities:
+            name_clean = ent.name.strip()
+            if len(name_clean) >= 2 and name_clean.lower() not in ent_map:
+                ent_map[name_clean.lower()] = ent
+        target_entities = list(ent_map.values())[:150]
+
+        if len(target_entities) < 2:
+            return []
+
+        # Split text into sentence clauses, filtering out trivial/empty lines
+        sentences = [s.strip() for s in re.split(r"[.!?\n]+", text) if 15 <= len(s.strip()) <= 500][:2000]
 
         for sentence in sentences:
-            clean_sent = sentence.strip()
-            if not clean_sent:
-                continue
+            clean_sent = sentence
+            clean_sent_lower = clean_sent.lower()
 
             # Find all entities present in this sentence
             present_entities: List[Tuple[int, Entity]] = []
-            for ent in entities:
-                idx = clean_sent.lower().find(ent.name.lower())
+            for ent in target_entities:
+                idx = clean_sent_lower.find(ent.name.lower())
                 if idx != -1:
                     present_entities.append((idx, ent))
 
