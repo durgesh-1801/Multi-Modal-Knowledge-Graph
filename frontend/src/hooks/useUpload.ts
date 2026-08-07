@@ -59,6 +59,11 @@ async function uploadPDFWithProgress(
           reject(new Error('Failed to parse upload response'));
         }
       } else {
+        if (xhr.status === 401) {
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('current_user');
+          window.dispatchEvent(new CustomEvent('auth:logout'));
+        }
         try {
           const parsed = JSON.parse(xhr.responseText);
           reject(new Error(parsed.message || parsed.detail || `HTTP ${xhr.status}`));
