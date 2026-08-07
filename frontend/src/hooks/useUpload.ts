@@ -24,7 +24,7 @@ interface UploadPDFOptions {
   onProgress?: (evt: UploadProgressEvent) => void;
 }
 
-const BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
 
 /** Upload one or more PDFs via XMLHttpRequest to track progress */
 async function uploadPDFWithProgress(
